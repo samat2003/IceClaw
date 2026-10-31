@@ -3,7 +3,7 @@
 **Decentralized AI planetary scientists for auditing lunar polar ice-prospectivity predictions**  
 ScienceClaw 2026 · [Project source](https://github.com/samat2003/IceClaw)
 
-**Project status (2026-10-31):** P0–P2 implemented and committed: Python core/contracts, validated real MOONATLAS numeric source, repeatable scientific tools, and region catalog. The reported local suite has **94 passing tests**; this README update did not rerun them. **P3–P8 remain pending.** No fresh NASA inference, live scientific swarm, app interface or measured benchmark is claimed.
+**Project status (2026-10-31):** P0–P4 are committed: tested Python core, authentic MOONATLAS prediction, deterministic science, sealed evaluation, and real SomBench temperature/shadow/slope paired with one prediction tile. P5 was **reported completed locally but has not been committed yet**: 215 passing tests (one default opt-in skip), plus one genuine four-specialist Microsoft Agent Framework run. Its Skeptic performed a live cross-agent follow-up; no live challenge/revision occurred. P6 verification/report, P7 matched-budget comparative results and P8 Streamlit demo remain pending. These reported tests were not independently rerun during this README update.
 
 ## What it will do
 
@@ -14,7 +14,7 @@ A researcher selects a *verified, covered* lunar south-polar tile. Four independ
 ## Canonical project documents
 
 1. **[Project specification](docs/PROJECT_SPEC.md)** — scientific objective, technology stack, data contracts, user experience, evidence standard, safety and evaluation semantics.
-2. **[Engineering implementation plan (revision 3.0)](docs/IMPLEMENTATION_PLAN.md)** — P0–P2 completed; P3 sealed evaluator; **P4 real SomBench thermal/PSR/slope data pairing before P5 agents**; P6 verifiable reports; P7 measured benchmark; P8 minimal Streamlit UI. **This is tool-independent software work, not instructions for a particular coding assistant.**
+2. **[Engineering implementation plan (revision 3.1)](docs/IMPLEMENTATION_PLAN.md)** — P0–P4 committed, P5 reported complete locally; P6 portable verification and context-budget safeguards, P8 minimal working Streamlit demo, P7 only eligible paired-scenario and matched-budget experimental comparisons. **This is tool-independent software work, not instructions for a particular coding assistant.**
 3. [Repository implementation guidance](AGENTS.md) — short durable project rules. [CLAUDE.md](CLAUDE.md) references these same rules without duplicating or changing the engineering plan.
 
 The older [scientific protocol](docs/SCIENTIFIC_PROTOCOL.md) and [two-minute presentation draft](docs/DEMO_2MIN.md) are supplementary historic notes. In a conflict, prefer the project specification and current engineering plan.
@@ -51,7 +51,7 @@ git pull --ff-only origin main
 
 **Note:** This repository now tracks `.gitignore`, `CLAUDE.md`, `AGENTS.md`, and `.env.example`. If you already created one of these locally but it is *untracked*, Git may refuse to pull because it would overwrite it. **Move the local copy to a backup outside the repository first; never delete or overwrite `.env`.** After pulling, compare the backup with the tracked version. See the next step below.
 
-Open `docs/IMPLEMENTATION_PLAN.md`. **P0, P1 and P2 have been implemented and committed; the next phase is P3.** Do not redo the initial package or adapter. Run existing unit tests before changes. **The benchmark, agents, verification and Streamlit UI do not yet exist**; check their phase gates rather than calling them prematurely.
+Open `docs/IMPLEMENTATION_PLAN.md`. **P0–P4 are committed and P5 is reported complete locally (commit pending). Next: review/commit P5, then start P6.** Run existing unit tests before changes. Do not conflate the P3/P4 engineering baselines with an actual LLM collective-vs-single-agent experiment. The verifiable downloadable report and Streamlit demo have not been implemented yet.
 
 Local `.env` may already hold an OpenAI key. Leave it untouched. `.env.example` contains only placeholder variable names, and `.gitignore` excludes `.env`, data, virtual environments, local research runs, model weights and local settings.
 

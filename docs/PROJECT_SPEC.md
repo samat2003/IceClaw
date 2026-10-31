@@ -5,7 +5,7 @@
 **Repository:** https://github.com/samat2003/IceClaw  
 **Implementation roadmap:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
-> **Document precedence:** This document governs scope, architecture, scientific semantics, data contracts, and acceptance criteria. The implementation plan governs sequence and commands. Earlier README and docs/SCIENTIFIC_PROTOCOL.md / docs/DEMO_2MIN.md are historical planning notes wherever they differ. No implementation step may silently change this specification.
+> **Document precedence:** This document governs scope, architecture, scientific semantics, data contracts, and acceptance criteria. The implementation plan governs sequence and commands. The current README summarizes the two canonical documents; older docs/SCIENTIFIC_PROTOCOL.md and docs/DEMO_2MIN.md are supplementary historical planning notes wherever they differ. No implementation step may silently change this specification.
 
 ## 1. Purpose and testable claim
 

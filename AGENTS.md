@@ -21,4 +21,4 @@ Engineering invariants:
 
 Existing planning docs `docs/SCIENTIFIC_PROTOCOL.md` and `docs/DEMO_2MIN.md` are supplementary and may reflect older assumptions.
 
-**Initial task: P0** of the implementation plan. Do not attempt the whole application in one unreviewed change.
+**Current implementation status:** P0–P2 are committed. **Next phase: P3** (sealed evaluator and benchmark firewall), followed by **P4** (authentic same-tile SomBench input ingestion), **P5** (Microsoft Agent Framework collective), **P6** (reports/verification), **P7** (benchmarks) and **P8** (Streamlit). See implementation plan v3.0. Complete and test one phase at a time; never redo committed phases without an actual regression.

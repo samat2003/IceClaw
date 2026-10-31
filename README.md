@@ -1,73 +1,74 @@
 # IceClaw
 
-**ScienceClaw 2026 — MIT Media Lab**
+**Decentralized AI planetary scientists for auditing lunar polar ice-prospectivity predictions**  
+ScienceClaw 2026 · [Project source](https://github.com/samat2003/IceClaw)
 
-**Status: architecture and scientific protocol only. No scientific results or running demo are claimed yet.**
+**Project status:** Engineering specification and development sequence are committed. The scientific application, NASA checkpoint execution, live scientific agent collective, Streamlit interface and benchmark results **have not yet been implemented or run**.
 
-IceClaw is a research-oriented, decentralized collective of AI planetary scientists that audits predictions of lunar polar ice prospectivity, tests alternative explanations with real NASA observations, and prioritizes follow-up investigations.
+## What it will do
 
-## Research question
+A researcher selects a *verified, covered* lunar south-polar tile. Four independent scientific specialists inspect authentic NASA-derived observations and published NASA–IBM ice-prospectivity predictions, propose/test hypotheses, challenge one another and publish a transparent evidence log. IceClaw exports a verifiable investigation and prioritizes further research.
 
-**Does sharing evidence among autonomous specialist agents improve the detection and explanation of unreliable lunar ice-prospectivity predictions, compared with a single agent or isolated specialists at the same tool/compute budget?**
+**Ice prospectivity is not a physical measurement of ice or a calibrated ice probability.** This research will audit predictions, **not claim new ice discovery**.
 
-Ice prospectivity is an *expert-derived index*, **not** measured lunar ice, a calibrated ice probability, or direct proof of a deposit. We must never label a high score as a discovered deposit.
+## Canonical project documents
 
-## Three upstream foundations
+1. **[Project specification](docs/PROJECT_SPEC.md)** — scientific objective, technology stack, data contracts, user experience, evidence standard, safety and evaluation semantics.
+2. **[Engineering implementation plan](docs/IMPLEMENTATION_PLAN.md)** — ordered phases P0–P8, exact modules, dependencies, test commands, entry/exit gates, and fallback conditions. **This is tool-independent software work, not instructions for a particular coding assistant.**
+3. [Repository implementation guidance](AGENTS.md) — short durable project rules. [CLAUDE.md](CLAUDE.md) references these same rules without duplicating or changing the engineering plan.
 
-1. [NASA–IBM Lunar Foundation Model](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model): pretrained scientific model and ice-prospectivity checkpoint. [Model/dataset on Hugging Face](https://huggingface.co/nasa-ibm-ai4science).
-2. [MOONATLAS Science](https://github.com/RRG1312/moonatlas-science): pinned acquisition, running published checkpoints, geolocation, normalization, validation, provenance and sample fixture. Independent project, not endorsed by NASA/IBM.
-3. [Microsoft Agent Framework](https://github.com/microsoft/agent-framework): independent tool-using scientific agents, parallel workflows, handoffs, streaming, tracing.
+The older [scientific protocol](docs/SCIENTIFIC_PROTOCOL.md) and [two-minute presentation draft](docs/DEMO_2MIN.md) are supplementary historic notes. In a conflict, prefer the project specification and current engineering plan.
 
-IceClaw owns the scientific investigation protocol, independently acting agents, evidence events, evaluation, API and web research console. No upstream names/logos imply endorsement.
+## Upstream open-source foundations
 
-## Minimal usable product
+- [NASA–IBM Lunar Foundation Model](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model) — specialist lunar scientific inference.
+- [MOONATLAS Science](https://github.com/RRG1312/moonatlas-science) — pinned scientific acquisition/inference, raster normalization, georeferencing, provenance, reproducibility and validation. It is an **independent** project, not operated or endorsed by NASA/IBM.
+- [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) — independently acting specialist agents, scientific tool calls and concurrent workflows.
 
-- **Input:** one verifiable held-out *south-polar* SomBench tile (8 source modalities, 256×256 at 240 m/px); NASA–IBM prediction; MOONATLAS geolocation and provenance.
-- **Validation:** MOONATLAS science-smoke validator on its *published real example*; full inference on an official held-out sample after checkpoints are available.
-- **Processing:** verify shape, coordinate reference system, missingness, raster provenance and scientific data split.
-- **Agents:** thermal scientist, geology scientist, model auditor, skeptic/experiment selector. They exchange structured findings asynchronously; no central model invents all next steps.
-- **Output:** interactive lunar map (raw model output and reference clearly separated), evidence log, disagreement or anomaly investigations, ranked *follow-up priorities*, and reproducible evaluation plots.
-- **Benchmark:** deterministic rule baseline, one agent with all tools, isolated agent team, communicating swarm; fixed information and call budgets. Expert reference maps stay hidden from agents until evaluation.
-- **Delivery:** working scientific analysis + usable UI + source code + 2-minute presentation with an actual measured result, even if improvement over baseline is absent.
+The original IceClaw code is the selectable-region research workbench, independently tested numerical tools, asynchronous specialist interactions, evidence verification and controlled collective-vs-single-agent evaluation.
 
-Do not claim data covers Cabeus or Shackleton until an exact tile footprint has been verified. The first example should use its actual coordinates.
+## Intended software architecture
 
-## Repository structure (target)
+- **Python 3.11/3.12**, NumPy, Rasterio, SciPy, pyproj
+- **Microsoft Agent Framework**, direct OpenAI model integration via its current supported Python OpenAI provider
+- **SQLite** append-only research events
+- **Streamlit + Plotly**, one-page interface; no separate API server for the hackathon
+- **MOONATLAS/NASA inference** in a separate pinned scientific environment; the application consumes validated output artifacts
+- **Live agent configuration:** `OPENAI_API_KEY`, `ICECLAW_LLM_MODEL`, and `ICECLAW_LLM_PROVIDER=openai` from local environment; NEVER committed
 
-```text
-iceclaw/
-├── app/                 # Streamlit UI: map, agent events, benchmark
-├── iceclaw/
-│   ├── data/            # MOONATLAS adapter; integrity/provenance validation
-│   ├── science/         # deterministic numerical and geospatial analysis
-│   ├── agents/          # Microsoft Agent Framework agents/tools
-│   ├── events/          # event schema and evidence store
-│   └── evaluation/      # no-leakage baselines and ablations
-├── tests/               # scientific invariants + event protocol tests
-├── docs/
-│   ├── SCIENTIFIC_PROTOCOL.md
-│   └── DEMO_2MIN.md
-└── artifacts/           # generated (gitignored unless small and licensed)
-```
+The planned UI allows a user to choose any scientifically covered region in the local catalog, run a new investigation, inspect source-backed claims and alternate explanations, verify a deterministic calculation, and download a research bundle. No assertion of global lunar coverage.
 
-Start with Python 3.11/3.12, NumPy/Rasterio/pyproj, Microsoft Agent Framework, SQLite and Streamlit/Plotly. Favor minimal working infrastructure over Redis/Postgres, fine-tuning or GPU orchestration.
+## Local WSL start
 
-## First reproducibility gate
-
-From an independently cloned MOONATLAS Science checkout (Python 3.11/3.12):
+Use the current clone:
 
 ```bash
-pip install -e ".[dev]"
-pytest
+cd ~/IceClaw
+git status --short
+# Pull latest committed documents after safeguarding any colliding local untracked files.
+git pull --ff-only origin main
+```
+
+**Note:** This repository now tracks `.gitignore`, `CLAUDE.md`, `AGENTS.md`, and `.env.example`. If you already created one of these locally but it is *untracked*, Git may refuse to pull because it would overwrite it. **Move the local copy to a backup outside the repository first; never delete or overwrite `.env`.** After pulling, compare the backup with the tracked version. See the next step below.
+
+Open `docs/IMPLEMENTATION_PLAN.md` and implement **P0** first. P0 creates the installable Python package and test suite. **Do not assume `python -m iceclaw.cli` or `streamlit run app.py` exist before the relevant phases have been implemented.**
+
+Local `.env` may already hold an OpenAI key. Leave it untouched. `.env.example` contains only placeholder variable names, and `.gitignore` excludes `.env`, data, virtual environments, local research runs, model weights and local settings.
+
+## First scientific reproducibility gate
+
+The published MOONATLAS sample includes a south-polar sample identified as `ice-s-0001-0002`. It is a **published example, not a fresh IceClaw inference**. After P0, P1 independently validates the example using the upstream MOONATLAS checkout:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest -q
 moonatlas-science validate --root examples/science-smoke --scope published
 ```
 
-These validate an upstream *published fixture*; they are **not a new IceClaw inference run**.
+Those commands must be run **within the upstream MOONATLAS scientific environment**, not in the application root. Actual input modalities may be absent from the published example and must never be invented; obtain official original SomBench arrays before claiming full thermal/geology analysis.
 
-For actual inference, follow that project's `python scripts/setup_environment.py` and `moonatlas-science smoke`. It documents ~6.3 GB of model/task checkpoints, GPU recommended but CPU possible.
+## Verification and evaluation goals
 
-## Hackathon constraints
+The full tool will produce source-referenced numerical measurements, event logs of authentic agent actions, a reproducible scientific bundle, benchmark artifacts and a fast offline verification command. It will compare (1) deterministic rules, (2) single AI scientist, (3) isolated specialists, and (4) communicating specialists on held-out, budget-controlled cases. Expert reference maps and synthetic fault labels are evaluator-only; the metric is **scientific auditing**, not detection of real water deposits.
 
-Official [ScienceClaw competition](https://scienceclawhack.ai/#competition): 25% scientific/technical impact, 25% collective capability, 20% problem significance, 20% decentralized agency, 10% execution/validation; +10 possible collaboration bonus. Slides due Nov 1, 2026, 1:00 PM ET.
-
-Read [scientific protocol](docs/SCIENTIFIC_PROTOCOL.md) and [presentation story](docs/DEMO_2MIN.md) before implementation.
+**Hackathon timeline:** final slides due Nov. 1, 2026 at 1:00 PM ET per [official competition](https://scienceclawhack.ai/#competition). Two-minute talk is our presentation target, not necessarily a rule.

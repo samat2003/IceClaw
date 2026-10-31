@@ -9,6 +9,8 @@ description = "Lunar ice-prospectivity audit workbench (prospectivity index, not
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+  "numpy>=1.26",
+  "pillow>=10",
   "pydantic>=2.6,<3",
   "python-dotenv>=1.0",
 ]

@@ -22,8 +22,8 @@ dist/
 
 # Scientific model/data caches, private evaluations and saved investigations
 .upstream/
-data/
-runs/
+/data/
+/runs/
 checkpoints/
 models/
 artifacts/generated/

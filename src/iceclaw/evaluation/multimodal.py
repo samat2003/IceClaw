@@ -554,6 +554,30 @@ class ObsBaselineConfig:
 
 
 @dataclass(frozen=True)
+class ObsBaselineConfigV2(ObsBaselineConfig):
+    """Baseline config **v2** (new version; v1 above and its frozen results are unchanged).
+
+    Single change: ``shadow_tol`` 1e-6 -> 1e-4. v1's tolerance equalled the noise level (1e-6
+    sigma) of the suite's own ``clean_quantization_noise`` control, so v1 flagged that clean
+    control (the documented P4 false positive). 1e-4 sits ~100x above that noise and float32
+    round-off while remaining far below any semantic corruption of a [0,1] mask.
+
+    v2 was NOT tuned or scored on the sealed ``p4-multimodal-v1`` labels. Any comparative
+    result using v2 must come from a NEW suite frozen after this config, never from v1's
+    suite (see docs/AGENT_RUNTIME.md).
+    """
+
+    version: str = "2"
+    shadow_tol: float = 1e-4
+
+
+OBS_BASELINE_CONFIGS: dict[str, ObsBaselineConfig] = {
+    "v1": ObsBaselineConfig(),
+    "v2": ObsBaselineConfigV2(),
+}
+
+
+@dataclass(frozen=True)
 class ObsRuleResult:
     rule_id: str
     triggered: bool

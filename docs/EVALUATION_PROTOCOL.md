@@ -116,3 +116,11 @@ independently frozen suite built from the 12 genuine SomBench south test tiles
 * **Runner requirement (P7):** present each case in an isolated run, as for P3.
 
 Reproduce: `python scripts/p4_build_multimodal.py --scenarios-root data/scenarios --eval-root data/evaluation`.
+
+## 7. P5 addendum: baseline v1 limitation and v2 (new version)
+
+The P4 false positive (`clean_quantization_noise` flagged by `shadow_range`; shadow tolerance 1e-6
+equals the control's noise) is a mis-specified v1 tolerance. v1 and its frozen results are
+unchanged. `ObsBaselineConfigV2` (shadow tolerance 1e-4) is a **new version** not scored on the
+sealed `p4-multimodal-v1` labels; comparative claims need a new suite frozen after it. See
+`docs/AGENT_RUNTIME.md` §6.

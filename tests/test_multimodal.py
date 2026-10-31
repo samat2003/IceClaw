@@ -300,3 +300,66 @@ def test_p3_baseline_surface_unchanged():
     cfg = baselines.BaselineConfig()
     assert (cfg.max_plausible, cfg.min_dynamic_range, cfg.footprint_tol_deg) == (1.5, 0.2, 1e-4)
     assert mm.ObsBaselineConfig().shadow_tol == 1e-6
+
+
+# ------------------------------------------------- baseline config v2 (new version, v1 intact)
+def _scenario(case, case_id="case-xx"):
+    """AgentScenario from an ObsCase (test helper; no sealed data involved)."""
+    from iceclaw.contracts import AgentRegionContext, RunBudget
+    from iceclaw.data.catalog import proj_string
+    from iceclaw.evaluation.fixtures import AgentScenario
+    from iceclaw.science.common import RasterLayer, RegionArrays
+
+    layers = {
+        n: RasterLayer(n, v, c, case.units[n], f"{case_id}/{n}", "e" * 64)
+        for n, (v, c) in case.layers.items()
+    }
+    arrays = RegionArrays(
+        case_id, case.footprint, case.resolution_m, case.projection, case.grid, layers
+    )
+    h, w = case.layers[mm.TEMP][0].shape
+    ctx = AgentRegionContext(
+        region_id=case_id, pole=case.pole, footprint=list(case.footprint), width=w, height=h,
+        spatial_resolution_m=case.resolution_m, lunar_crs=proj_string(case.projection),
+        source_ids=[case_id], source_mode=SourceMode.OBSERVATION_ONLY,
+        available_modalities=list(layers), available_tools=list(mm.OBSERVATION_TOOLS),
+        budget=RunBudget(max_events=5, max_hops=2, max_tool_calls=5, max_llm_calls=5, timeout_s=5),
+    )  # fmt: skip
+    return AgentScenario(case_id, ctx, arrays)
+
+
+def test_baseline_v2_is_a_new_version_and_v1_is_untouched(tiles):
+    v1, v2 = mm.OBS_BASELINE_CONFIGS["v1"], mm.OBS_BASELINE_CONFIGS["v2"]
+    assert type(v1) is mm.ObsBaselineConfig and isinstance(v2, mm.ObsBaselineConfigV2)
+    # v1 values and hash-relevant fields are exactly the frozen P4 ones
+    assert (v1.shadow_tol, v1.temp_min_k, v1.temp_max_k) == (1e-6, 20.0, 450.0)
+    assert (v1.slope_max_floor_deg, v1.slope_max_ceiling_deg) == (1.0, 90.0)
+    assert v1.psr_sign_min_difference_k == -20.0 and not hasattr(v1, "version")
+    from dataclasses import asdict
+
+    d1, d2 = asdict(v1), asdict(v2)
+    changed = {k for k in d2 if d1.get(k) != d2[k]}
+    assert changed == {"shadow_tol", "version"} and d2["shadow_tol"] == 1e-4
+    assert v1.sha256() != v2.sha256()
+    assert v1.sha256() == mm.ObsBaselineConfig().sha256()  # v1 hash is stable
+
+
+def test_v2_fixes_the_documented_false_positive_without_hiding_real_shadow_faults(tiles):
+    clean = tiles[0].case
+    noisy, _ = mm.apply_obs_fault("clean_quantization_noise", clean, 7)  # the documented control
+    s = _scenario(noisy)
+    v1 = mm.run_multimodal_baseline(s, mm.OBS_BASELINE_CONFIGS["v1"])
+    v2 = mm.run_multimodal_baseline(s, mm.OBS_BASELINE_CONFIGS["v2"])
+    assert v1.flagged and v1.triggered_rules == ["shadow_range"]  # the v1 limitation, reproduced
+    assert not v2.flagged and v2.triggered_rules == []
+    # a genuinely out-of-range mask (x1.5) is still caught by v2
+    bad = clean.copy()
+    v, c = bad.layers[mm.SHADOW]
+    bad.layers[mm.SHADOW] = (v * 1.5, c)
+    assert (
+        "shadow_range"
+        in mm.run_multimodal_baseline(_scenario(bad), mm.OBS_BASELINE_CONFIGS["v2"]).triggered_rules
+    )
+    # and a clean identical tile is clean under both
+    for cfg in mm.OBS_BASELINE_CONFIGS.values():
+        assert not mm.run_multimodal_baseline(_scenario(clean), cfg).flagged

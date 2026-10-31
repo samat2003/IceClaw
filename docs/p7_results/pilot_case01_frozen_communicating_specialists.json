@@ -1,0 +1,27 @@
+{
+ "arm": "communicating_specialists",
+ "config_sha256": "663766aa59f122e32770062defafbb401dc91c0f4d8298776c533b7fc5c19dc3",
+ "frozen": {
+  "declared_subset": [
+   "case-01"
+  ],
+  "flags": [
+   [
+    "case-01",
+    false
+   ]
+  ],
+  "sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+  "suite_manifest_sha256": "28035f1e773d430975af6c3e531e5543ed764d218b3016c154150b90f0378796"
+ },
+ "frozen_utc": "2026-10-31T21:36:26.091725+00:00",
+ "output_file_sha256": {
+  "case-01": {
+   "decision.json": "fa58f5ad1322e50112192509e40d134e7a046e31079909a23f223ae5320de060",
+   "events.jsonl": "bdd272168bf497ed3e95147ebfb6da7673edd71a7235397203a94a7f9c641ab6",
+   "llm_calls.jsonl": "a537b176ed9b5467b78b1f1d707469e37d0b8abc30a518b27695acb8247e9864",
+   "run_summary.json": "eee677221be56eac54d55731cfb85f97bcb82d63d061b9f532abbadee37a0c20",
+   "tool_runs.json": "c98ebc731fccc4e1b5444dd4b57b656c3a95faaacbb419cffafe6c6b4219e70d"
+  }
+ }
+}

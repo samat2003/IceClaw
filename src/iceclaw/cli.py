@@ -66,8 +66,22 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--out", metavar="NEW_BUNDLE_ID")
     rep = sub.add_parser("replay", help="Replay a saved run from its events (no model call)")
     rep.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
-    ben = sub.add_parser("benchmark", help="Run a benchmark config (P7)")
+    ben = sub.add_parser(
+        "benchmark", help="P7 paired-tile benchmark: build-suite, run, freeze, score, estimate"
+    )
     ben.add_argument("--config", required=True, metavar="PATH")
+    ben.add_argument(
+        "--action",
+        choices=["build-suite", "run", "freeze", "score", "estimate"],
+        default="run",
+    )
+    ben.add_argument("--arms", nargs="*", metavar="ARM", help="subset of the config's arms")
+    ben.add_argument("--eval-root", metavar="DIR", help="evaluator-only root (build/score)")
+    ben.add_argument(
+        "--confirm-paid",
+        action="store_true",
+        help="required to run LLM arms (real, paid OpenAI calls)",
+    )
     return p
 
 
@@ -77,7 +91,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 1
-    if args.command in ("list-regions", "investigate"):
+    if args.command in ("list-regions", "investigate") or (
+        args.command == "benchmark" and args.action in ("run", "build-suite")
+    ):
         load_dotenv_file()  # IceClaw's own loader; values are never printed
     if args.command == "list-regions":
         return _list_regions(as_json=args.json, obs_only=args.observation_only)
@@ -91,6 +107,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _publish(args)
     if args.command == "replay":
         return _replay(args.run)
+    if args.command == "benchmark":
+        return _benchmark(args)
     print(
         f"NOT_IMPLEMENTED: '{args.command}' is scheduled for phase {_PHASES[args.command]}.",
         file=sys.stderr,
@@ -283,6 +301,80 @@ def _list_regions(as_json: bool, obs_only: bool = False) -> int:
     if not rows:
         print("NO_VALIDATED_REGIONS: no usable MOONATLAS export found.", file=sys.stderr)
         return 1
+    return 0
+
+
+def _benchmark(args) -> int:
+    import json as _json
+    from pathlib import Path
+
+    from iceclaw import benchmark as bm
+
+    try:
+        cfg = bm.load_config(Path(args.config))
+    except FileNotFoundError:
+        print(f"CONFIG_NOT_FOUND: {args.config}", file=sys.stderr)
+        return 1
+    except ValueError as e:
+        print(f"BAD_CONFIG: {e}", file=sys.stderr)
+        return 1
+    arms = args.arms or cfg.arms
+    print(f"config {args.config} sha256 {cfg.sha256()[:16]}; outputs {cfg.run_root}")
+    if args.action == "build-suite":
+        from iceclaw.evaluation import paired
+
+        if not args.eval_root:
+            print("--eval-root is required to build a suite", file=sys.stderr)
+            return 1
+        src = paired.load_real_paired_source(load_settings())
+        extra = {}
+        if bm.is_v2(cfg):  # the case list was pre-registered in the v2 config
+            extra = {"fault_ids": bm.planned_fault_ids(cfg), "suite_version": "2"}
+        m = paired.build_paired_suite(src, Path(cfg.scenarios_root), Path(args.eval_root),
+                                      suite_id=cfg.suite_id, **extra)  # fmt: skip
+        print(f"frozen suite {m.suite_id}: {len(m.cases)} cases; manifest {m.body_sha256()}")
+        return 0
+    if args.action == "estimate":
+        print(_json.dumps(bm.budget_estimate(cfg, bm.planned_case_count(cfg)), indent=1))
+        return 0
+    if args.action == "run":
+        llm = [a for a in arms if a != bm.BASELINE]
+        if llm and not args.confirm_paid:
+            est = bm.budget_estimate(cfg, len(cfg.resolved_cases()))
+            print(
+                "REFUSED: LLM arms make real, paid model calls. Upper bound for this run: "
+                f"{_json.dumps(est['upper_bound'])}. Re-run with --confirm-paid.",
+                file=sys.stderr,
+            )
+            return 2
+        from iceclaw.config import ConfigError
+
+        svc = _service()
+        try:
+            for a in arms:
+                bm.run_arm(cfg, a, svc)
+        except ConfigError as e:
+            print(f"LIVE MODE UNAVAILABLE: {e}", file=sys.stderr)
+            return 2
+        return 0
+    if args.action == "freeze":
+        for a in arms:
+            rec = bm.freeze_arm(cfg, a)
+            print(f"frozen {a}: {rec['frozen']['sha256']}")
+        return 0
+    if not args.eval_root:
+        print("--eval-root is required to score", file=sys.stderr)
+        return 1
+    out = bm.score(cfg, Path(args.eval_root))
+    for a, r in out["arms"].items():
+        print(
+            f"{a}: n={r['n_cases']} TP={r['tp']} FP={r['fp']} FN={r['fn']} TN={r['tn']} "
+            f"precision={r['precision']} recall={r['recall']} f1={r['f1']} "
+            f"fpr={r['false_positive_rate']} missing={r['decision_missing']} "
+            f"tokens={r['usage_total']['total_tokens']:.0f} "
+            f"calls={r['usage_total']['llm_calls']:.0f}"
+        )
+    print(f"scores: {cfg.run_root / 'scores'}")
     return 0
 
 

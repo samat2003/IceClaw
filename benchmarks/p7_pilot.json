@@ -1,0 +1,13 @@
+{
+  "format": "iceclaw-p7-benchmark/1",
+  "suite_id": "p7-paired-v1",
+  "scenarios_root": "data/scenarios",
+  "output_root": "runs/benchmarks",
+  "arms": ["deterministic_rules", "single_generalist", "isolated_specialists", "communicating_specialists"],
+  "case_ids": ["case-01"],
+  "budget": {"max_events": 48, "max_hops": 5, "max_tool_calls": 16, "max_llm_calls": 16, "timeout_s": 360},
+  "max_input_tokens": 64000,
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "note": "P7 one-case live feasibility pilot. case-01 = first case in manifest order, declared before the suite was built (no label access). The budget is the TOTAL per case and arm."
+}

@@ -1,0 +1,27 @@
+{
+ "arm": "single_generalist",
+ "config_sha256": "663766aa59f122e32770062defafbb401dc91c0f4d8298776c533b7fc5c19dc3",
+ "frozen": {
+  "declared_subset": [
+   "case-01"
+  ],
+  "flags": [
+   [
+    "case-01",
+    false
+   ]
+  ],
+  "sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+  "suite_manifest_sha256": "28035f1e773d430975af6c3e531e5543ed764d218b3016c154150b90f0378796"
+ },
+ "frozen_utc": "2026-10-31T21:36:26.089539+00:00",
+ "output_file_sha256": {
+  "case-01": {
+   "decision.json": "329364174a4066a1fa38ddd4fad9f175fb15bbe61cf28bae9e641f72ffcf78a7",
+   "events.jsonl": "3d4f34df89d1b2556c22ef5f48aff03596391cfb04f1d14e5b8c455e42d0e938",
+   "llm_calls.jsonl": "5b89c0a559b36a2c9ba1d05ab64879019edd37fbb8f253c63eb705ebd8eb81b2",
+   "run_summary.json": "b783c9f2bf26b90b2722463b58ee95c892bc5a046a04a1a0767001a55c1587ff",
+   "tool_runs.json": "8b9588e72bdf53339cabbd7f86b36e8bd19c27e794f855e2f6bb227a696ed153"
+  }
+ }
+}

@@ -1,0 +1,17 @@
+{
+ "frozen_utc": "2026-10-31T22:33:58.543738+00:00",
+ "suite_id": "p7-paired-v2",
+ "suite_version": "2",
+ "manifest_sha256": "6db2c8d654da09913939700675e82ae616c48327dadb9dddd63462e206edd786",
+ "sealed_commitment": "8694d008889a0442c537ca0abba0c4a94c1343285f695f54f9ba336e5ce46904",
+ "case_ids": [
+  "case-01",
+  "case-02",
+  "case-03",
+  "case-04",
+  "case-05",
+  "case-06"
+ ],
+ "config_sha256": "ab80de50562ba928eecfb0c0ba40fa493e069703d8b1f3307a6e4a214c10ecf3",
+ "note": "generated after benchmarks/p7_v2_preregistration.json; sealed key not opened"
+}

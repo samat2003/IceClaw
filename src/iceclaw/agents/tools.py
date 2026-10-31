@@ -226,18 +226,38 @@ def make_tools(runtime: SwarmRuntime, spec: AgentSpec) -> list[Any]:
     @tool(name="get_event", description="Read one event with its measurement summary, if any.")
     @_json
     def get_event(event_id: Annotated[str, "event id"]) -> str:
-        return runtime.get_event_detail(event_id)  # type: ignore[return-value]
+        return runtime.get_event_detail(event_id, aid)  # type: ignore[return-value]
 
-    out = [
-        run_science_tool,
-        publish_claim,
-        publish_challenge,
-        request_test,
-        publish_revision,
-        conclude,
-        list_events,
-        get_event,
-    ]
+    out = [run_science_tool, publish_claim]
+    if runtime.communication:  # isolated agents (P7) get no tools that address other agents
+        out += [publish_challenge, request_test]
+    out += [publish_revision, conclude, list_events, get_event]
+    if runtime.require_assessment:
+        mods = ", ".join(runtime.context.available_modalities)
+
+        @tool(
+            name="submit_assessment",
+            description=(
+                "File your machine-readable assessment of THIS case (a later call replaces the "
+                "earlier one). verdict: 'fault_suspected' if your evidence indicates a data or "
+                "processing fault (wrong unit or scale, corrupted/missing block, inverted mask, "
+                "layers misaligned or mislabeled, ...), else 'no_fault_found'. "
+                f"suspected_layers: subset of [{mods}] (required for fault_suspected). cites: "
+                "measurement event ids supporting the verdict (at least one)."
+            ),
+        )
+        @_json
+        def submit_assessment(
+            verdict: Annotated[str, "fault_suspected|no_fault_found"],
+            cites: Annotated[list[str], "measurement event ids supporting the verdict"],
+            rationale: Annotated[str, "one or two sentences; numbers only from cited events"],
+            suspected_layers: Annotated[list[str] | None, "layers you suspect"] = None,
+        ) -> str:
+            return runtime.submit_assessment(  # type: ignore[return-value]
+                aid, verdict, suspected_layers, cites, rationale
+            )
+
+        out.append(submit_assessment)
     if spec.can_recompute:
 
         @tool(

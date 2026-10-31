@@ -1,0 +1,13 @@
+arm,case_id,fault_id,is_fault,flagged,outcome,decision_missing,verdicts,suspected_layers,triggered_rules,ended_reason,elapsed_s,tool_calls,llm_calls,input_tokens,output_tokens,total_tokens,events
+deterministic_rules,case-01,clean_float32_roundtrip,False,False,TN,False,{},,,DETERMINISTIC,0.0075,10,0,0,0,0,0
+deterministic_rules,case-02,prediction_nan_block,True,True,TP,False,{},,missing_data,DETERMINISTIC,0.0029,10,0,0,0,0,0
+deterministic_rules,case-03,clean_identical,False,False,TN,False,{},,,DETERMINISTIC,0.0027,10,0,0,0,0,0
+deterministic_rules,case-04,prediction_offset_small,True,False,FN,False,{},,,DETERMINISTIC,0.0026,10,0,0,0,0,0
+deterministic_rules,case-05,clean_subthreshold_noise,False,False,TN,False,{},,,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-06,temperature_misregistered,True,True,TP,False,{},,psr_temperature_sign,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-07,prediction_percent_scale,True,True,TP,False,{},,prediction_range;prediction_outside_unit_fraction,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-08,temperature_unit_celsius,True,True,TP,False,{},,temperature_range,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-09,slope_unit_radians,True,True,TP,False,{},,slope_range,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-10,shadow_mask_inverted,True,True,TP,False,{},,psr_temperature_sign,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-11,clean_identical_repeat,False,False,TN,False,{},,,DETERMINISTIC,0.0024,10,0,0,0,0,0
+deterministic_rules,case-12,prediction_misregistered,True,False,FN,False,{},,,DETERMINISTIC,0.0024,10,0,0,0,0,0

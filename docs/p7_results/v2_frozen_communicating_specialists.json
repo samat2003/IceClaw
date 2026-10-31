@@ -1,0 +1,80 @@
+{
+ "arm": "communicating_specialists",
+ "config_sha256": "ab80de50562ba928eecfb0c0ba40fa493e069703d8b1f3307a6e4a214c10ecf3",
+ "frozen": {
+  "declared_subset": null,
+  "flags": [
+   [
+    "case-01",
+    false
+   ],
+   [
+    "case-02",
+    false
+   ],
+   [
+    "case-03",
+    true
+   ],
+   [
+    "case-04",
+    false
+   ],
+   [
+    "case-05",
+    true
+   ],
+   [
+    "case-06",
+    false
+   ]
+  ],
+  "sha256": "c696957bd79f2839563f2966ced627b47eed15dabfaa42201f0fd214d15b4877",
+  "suite_manifest_sha256": "6db2c8d654da09913939700675e82ae616c48327dadb9dddd63462e206edd786"
+ },
+ "frozen_utc": "2026-10-31T22:45:18.434300+00:00",
+ "output_file_sha256": {
+  "case-01": {
+   "decision.json": "745ab4d53e80abcd851e7ce8178efce02260378abf335e61a61bd3cd93bee034",
+   "events.jsonl": "53a2047340b4e380f9764134b919030caadea5ebc2c350e53b1ddd0ab694a9a7",
+   "llm_calls.jsonl": "4afa41b4e24a357aa98c39a0b1d33013438b37769dde2a90574a30fa961ed75e",
+   "run_summary.json": "f5b9643ff157f80625821b80138af5a1b4b3328256c63953892f9c6d25ad3f88",
+   "tool_runs.json": "ffd7f74a481b61854003360cebc17d1da5e4dbcc3acf2276d8ee21baf11cda85"
+  },
+  "case-02": {
+   "decision.json": "351356ac668a328adc78c24cb1ef144a881e11457367b3c1c7e4abb369a30f1c",
+   "events.jsonl": "e484b23a06b6084f011bced26f7289944fe9ca02bcc0984bc842f9f9410f8dbc",
+   "llm_calls.jsonl": "518de08a5ec048542722b84ee3532e5c1a505b653c6698db12e79d02d29b97ed",
+   "run_summary.json": "4f2f5de895d84a2462f0f81fbe9c27665fc538a16b50b37dfebf6a429798195e",
+   "tool_runs.json": "980a3396b2d2fcfcf53c144621b758b4f4b6ca8b8392c5df458552ca52944ae6"
+  },
+  "case-03": {
+   "decision.json": "cf8ac8eaf7dd75d87c2d62fb558f77dd81fc6f76cdc770a10be3f412a751f464",
+   "events.jsonl": "7f2130737cf549616e7707152f5f3514674f7abba76842fa7515a3c8c89999a6",
+   "llm_calls.jsonl": "e9b8155b36d98fcdaed010a8350217786ac234dfa03b5b40d8d33012e7754d8d",
+   "run_summary.json": "d813a358fd935a1c7a709a752e63b8df81f76acdda24523f28181ef37750941a",
+   "tool_runs.json": "3521cec8c1745cabe9f737891ad4e77d7d6fd7214c30e449f910f77ed7d8f7c6"
+  },
+  "case-04": {
+   "decision.json": "822cda91540467c118993e77001620404f5bae8464a263cbc15197253b22dadc",
+   "events.jsonl": "f57f0f2114a85ce58a42255ab6532aa5d04507c3e002513d2bcd8d57b3fb65f6",
+   "llm_calls.jsonl": "4139d022e9216ccdf1b782d26b94fe194106c20a6751a8a951efeb627f224687",
+   "run_summary.json": "d4f661905f7538417e9981bdf90bc0425664a5b0ab082c5342c9f27b9412b7a3",
+   "tool_runs.json": "75b5d0e5db1697b408d84e842f21fe9e0eb889588b1dfd6494a5bc7f173714ff"
+  },
+  "case-05": {
+   "decision.json": "df46cda23b790d10d553597b8b2b2c88d81d05095a6c26421daee809abca880b",
+   "events.jsonl": "c326f7142cd570ca9f1d640a10f5ac99c40f69a66d87470bb653ddf03239678e",
+   "llm_calls.jsonl": "d1181a5d6159c15141295da2660716277f7f5d0ea5771293ae55a1eeb09c205c",
+   "run_summary.json": "e66f763a9a63539df8a430733d98a165c385857ed413e8c0bffa2804a57f3c5c",
+   "tool_runs.json": "1f50ae7f7d0ba8d4f065967e4e5775b852621ffc84c5671e42069cf51c90e852"
+  },
+  "case-06": {
+   "decision.json": "b6518f2a29120a1e0489dd9feff732d521537c722a453c95d182128960c83500",
+   "events.jsonl": "8ebe8f19c5a448c4d6d9ed243ad05336da51a0bed42154f81a63ac1a55db63ff",
+   "llm_calls.jsonl": "cd0ca414e3a7299bd5a59772b9ce62714463440da5831cefc4c011426c85f5f3",
+   "run_summary.json": "491c8e2f238fae0af51905c65808f32f17141aff2018756b6e84a9b81c6ec377",
+   "tool_runs.json": "14d5f0421baef191a77689e06441c507bcc3efb095a050ba78f4652a08fac67c"
+  }
+ }
+}

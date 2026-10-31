@@ -1,0 +1,27 @@
+{
+ "arm": "isolated_specialists",
+ "config_sha256": "663766aa59f122e32770062defafbb401dc91c0f4d8298776c533b7fc5c19dc3",
+ "frozen": {
+  "declared_subset": [
+   "case-01"
+  ],
+  "flags": [
+   [
+    "case-01",
+    false
+   ]
+  ],
+  "sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+  "suite_manifest_sha256": "28035f1e773d430975af6c3e531e5543ed764d218b3016c154150b90f0378796"
+ },
+ "frozen_utc": "2026-10-31T21:36:26.090680+00:00",
+ "output_file_sha256": {
+  "case-01": {
+   "decision.json": "8af8f0b28dc399eaaa7379c6b07899ee559e8291ae7afb71b091e47c3cb0da9e",
+   "events.jsonl": "b4288c75faaf903a05e48250260b8c374d1ba32e13822258ab32544b4763490e",
+   "llm_calls.jsonl": "462e7e74a443695372f39376521774b16a9c88fcbe10b7f6e93d470731ab23ae",
+   "run_summary.json": "10bd3e73c9aa94b15a835c1fb62d02a80cee43b3a14292b0394901a5d2579cb1",
+   "tool_runs.json": "24669d774150ec635a3535357a7ed725217d975090f95ec1d99e2a61ab3ca2e7"
+  }
+ }
+}

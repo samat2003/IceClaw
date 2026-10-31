@@ -1,0 +1,175 @@
+{
+ "arms": {
+  "communicating_specialists": {
+   "decision_missing": 0,
+   "declared_subset": [
+    "case-01"
+   ],
+   "expectation_check": null,
+   "f1": null,
+   "false_positive_rate": 0.0,
+   "fn": 0,
+   "fp": 0,
+   "frozen_sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+   "n_cases": 1,
+   "n_clean_cases": 1,
+   "n_fault_cases": 0,
+   "precision": null,
+   "recall": null,
+   "tn": 1,
+   "tp": 0,
+   "usage_mean_per_case": {
+    "elapsed_s": 14.792,
+    "events": 23.0,
+    "input_tokens": 57032.0,
+    "llm_calls": 15.0,
+    "output_tokens": 2882.0,
+    "tool_calls": 16.0,
+    "total_tokens": 59914.0
+   },
+   "usage_total": {
+    "elapsed_s": 14.792,
+    "events": 23.0,
+    "input_tokens": 57032.0,
+    "llm_calls": 15.0,
+    "output_tokens": 2882.0,
+    "tool_calls": 16.0,
+    "total_tokens": 59914.0
+   }
+  },
+  "deterministic_rules": {
+   "decision_missing": 0,
+   "declared_subset": [
+    "case-01"
+   ],
+   "expectation_check": {
+    "mismatches_vs_preregistered": []
+   },
+   "f1": null,
+   "false_positive_rate": 0.0,
+   "fn": 0,
+   "fp": 0,
+   "frozen_sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+   "n_cases": 1,
+   "n_clean_cases": 1,
+   "n_fault_cases": 0,
+   "precision": null,
+   "recall": null,
+   "tn": 1,
+   "tp": 0,
+   "usage_mean_per_case": {
+    "elapsed_s": 0.0075,
+    "events": 0.0,
+    "input_tokens": 0.0,
+    "llm_calls": 0.0,
+    "output_tokens": 0.0,
+    "tool_calls": 10.0,
+    "total_tokens": 0.0
+   },
+   "usage_total": {
+    "elapsed_s": 0.0075,
+    "events": 0.0,
+    "input_tokens": 0.0,
+    "llm_calls": 0.0,
+    "output_tokens": 0.0,
+    "tool_calls": 10.0,
+    "total_tokens": 0.0
+   }
+  },
+  "isolated_specialists": {
+   "decision_missing": 0,
+   "declared_subset": [
+    "case-01"
+   ],
+   "expectation_check": null,
+   "f1": null,
+   "false_positive_rate": 0.0,
+   "fn": 0,
+   "fp": 0,
+   "frozen_sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+   "n_cases": 1,
+   "n_clean_cases": 1,
+   "n_fault_cases": 0,
+   "precision": null,
+   "recall": null,
+   "tn": 1,
+   "tp": 0,
+   "usage_mean_per_case": {
+    "elapsed_s": 11.886,
+    "events": 21.0,
+    "input_tokens": 48553.0,
+    "llm_calls": 16.0,
+    "output_tokens": 3296.0,
+    "tool_calls": 16.0,
+    "total_tokens": 51849.0
+   },
+   "usage_total": {
+    "elapsed_s": 11.886,
+    "events": 21.0,
+    "input_tokens": 48553.0,
+    "llm_calls": 16.0,
+    "output_tokens": 3296.0,
+    "tool_calls": 16.0,
+    "total_tokens": 51849.0
+   }
+  },
+  "single_generalist": {
+   "decision_missing": 0,
+   "declared_subset": [
+    "case-01"
+   ],
+   "expectation_check": null,
+   "f1": null,
+   "false_positive_rate": 0.0,
+   "fn": 0,
+   "fp": 0,
+   "frozen_sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+   "n_cases": 1,
+   "n_clean_cases": 1,
+   "n_fault_cases": 0,
+   "precision": null,
+   "recall": null,
+   "tn": 1,
+   "tp": 0,
+   "usage_mean_per_case": {
+    "elapsed_s": 20.666,
+    "events": 18.0,
+    "input_tokens": 22097.0,
+    "llm_calls": 6.0,
+    "output_tokens": 1562.0,
+    "tool_calls": 16.0,
+    "total_tokens": 23659.0
+   },
+   "usage_total": {
+    "elapsed_s": 20.666,
+    "events": 18.0,
+    "input_tokens": 22097.0,
+    "llm_calls": 6.0,
+    "output_tokens": 1562.0,
+    "tool_calls": 16.0,
+    "total_tokens": 23659.0
+   }
+  }
+ },
+ "budget_per_case_and_arm": {
+  "max_events": 48,
+  "max_hops": 5,
+  "max_input_tokens": 64000,
+  "max_llm_calls": 16,
+  "max_tool_calls": 16,
+  "timeout_s": 360.0
+ },
+ "caveats": [
+  "All cases are copies of ONE genuine paired tile (ice-s-0001-0002); cases share pixels and are not independent samples. Results do not generalize to other regions or to the Moon.",
+  "Faults are synthetic corruptions of genuine data, not real lunar anomalies.",
+  "The statistical unit is the case, never the pixel; no confidence intervals are reported.",
+  "Metrics over a declared subset (e.g. a one-case pilot) are feasibility checks, not a performance comparison.",
+  "Token counts are provider-reported; no price is applied (unpriced).",
+  "Fault expectations were pre-registered by the author of the deterministic baseline; they are a plumbing check, not an independent difficulty estimate."
+ ],
+ "config_sha256": "663766aa59f122e32770062defafbb401dc91c0f4d8298776c533b7fc5c19dc3",
+ "decision_rule": "A case is FLAGGED iff at least one agent's LATEST submit_assessment verdict is 'fault_suspected' (every assessment cites >= 1 measurement event). If no agent filed an assessment the case is NOT flagged and is reported as decision_missing. The deterministic baseline flags a case iff any pre-registered rule triggers (PairedBaselineConfig).",
+ "format": "iceclaw-p7-benchmark/1",
+ "scored_utc": "2026-10-31T21:36:55.241903+00:00",
+ "suite_id": "p7-paired-v1"
+}

@@ -33,21 +33,44 @@ class FrozenDetections:
     suite_manifest_sha256: str
     flags: tuple[tuple[str, bool], ...]  # sorted (case_id, flagged)
     sha256: str
+    # P7: an explicitly DECLARED subset of detection cases (e.g. a one-case pilot). None = all.
+    declared_subset: tuple[str, ...] | None = None
 
     def as_dict(self) -> dict[str, bool]:
         return dict(self.flags)
 
 
-def freeze_detections(manifest: SuiteManifest, flags: dict[str, bool]) -> FrozenDetections:
-    expected = set(manifest.detection_case_ids)
+def freeze_detections(
+    manifest: SuiteManifest, flags: dict[str, bool], subset: list[str] | None = None
+) -> FrozenDetections:
+    """Freeze detector output. With ``subset`` the output must cover exactly that declared list
+    of the suite's detection cases (the subset is part of the hash); otherwise all of them."""
+    detection = set(manifest.detection_case_ids)
+    expected = detection if subset is None else set(subset)
+    if not expected <= detection or (subset is not None and len(set(subset)) != len(subset)):
+        raise ValueError(f"declared subset is not a set of detection cases: {subset}")
+    if not expected:
+        raise ValueError("declared subset is empty")
     if set(flags) != expected:
         raise ValueError(
-            f"detections must cover exactly the suite's detection cases; "
+            f"detections must cover exactly the declared detection cases; "
             f"missing={sorted(expected - set(flags))} extra={sorted(set(flags) - expected)}"
         )
     items = tuple(sorted((k, bool(v)) for k, v in flags.items()))
-    body = canonical_json({"suite": manifest.body_sha256(), "flags": items})
-    return FrozenDetections(manifest.body_sha256(), items, sha256_bytes(body.encode()))
+    if subset is None:  # unchanged hash body for full-suite outputs (P3/P4 compatibility)
+        body = canonical_json({"suite": manifest.body_sha256(), "flags": items})
+        return FrozenDetections(manifest.body_sha256(), items, sha256_bytes(body.encode()))
+    declared = tuple(sorted(subset))
+    body = canonical_json({"suite": manifest.body_sha256(), "flags": items, "subset": declared})
+    return FrozenDetections(manifest.body_sha256(), items, sha256_bytes(body.encode()), declared)
+
+
+def frozen_detections_sha256(frozen: FrozenDetections) -> str:
+    """Recompute the binding hash of a frozen output (detects edits after freezing)."""
+    body: dict[str, Any] = {"suite": frozen.suite_manifest_sha256, "flags": frozen.flags}
+    if frozen.declared_subset is not None:
+        body["subset"] = frozen.declared_subset
+    return sha256_bytes(canonical_json(body).encode())
 
 
 @dataclass(frozen=True)
@@ -109,9 +132,19 @@ def score_detections(
     manifest = load_manifest(scenarios_root, suite_id)
     if frozen.suite_manifest_sha256 != manifest.body_sha256():
         raise SuiteIntegrityError("frozen detections belong to a different suite manifest")
+    if frozen_detections_sha256(frozen) != frozen.sha256:
+        raise SuiteIntegrityError("frozen detections were modified after freezing")
     sealed = load_sealed(eval_root, manifest)
     flags = frozen.as_dict()
-    result = detection_metrics(flags, sealed.labels)
+    labels = sealed.labels
+    if frozen.declared_subset is not None:
+        if set(frozen.declared_subset) != set(flags):
+            raise SuiteIntegrityError("frozen flags do not match their declared subset")
+        labels = {c: labels[c] for c in frozen.declared_subset}
+    result = detection_metrics(flags, labels)
+    result["declared_subset"] = (
+        None if frozen.declared_subset is None else list(frozen.declared_subset)
+    )
     result["frozen_sha256"] = frozen.sha256
     result["per_case"] = _per_case(flags, sealed)
     result["expectation_check"] = _expectation_check(flags, sealed)

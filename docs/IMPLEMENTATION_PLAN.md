@@ -1,7 +1,8 @@
 # IceClaw — Engineering Implementation Plan
 
 **Revision:** 3.1 · 2026-10-31  
-**Status:** P0–P4 implemented and committed; P5 reported COMPLETE locally but UNCOMMITTED (215 tests passed, one default live-test skip; one genuine live MAF run). P6–P8 pending. This documentation edit does not independently run the uncommitted P5 code.  
+**Status:** P0–P8 implemented and committed (360 offline tests pass, 1 opt-in live skip). One genuine live four-specialist investigation is recorded, verified offline and published as a public-redacted bundle. P7 was executed once under a pre-registered protocol with a negative, exploratory result (communication did not improve detection, completeness or efficiency on six synthetic cases from one tile; see docs/BENCHMARK_P7.md). Remaining manual check: one live investigation started from the Streamlit UI.
+
 **Product and scientific authority:** [PROJECT_SPEC.md](PROJECT_SPEC.md).  
 **Real-data feasibility:** [SOMBENCH_FEASIBILITY.md](SOMBENCH_FEASIBILITY.md).  
 **Existing validated upstream artifact:** [UPSTREAM_MOONATLAS.md](UPSTREAM_MOONATLAS.md).
@@ -17,13 +18,16 @@ This is a **software engineering specification**, independent of the editor, ter
 | **P2 — Catalog and science tools** | DONE (committed) | `data/catalog.py`, `data/validation.py`, `science/`, `services.py`, catalog/science tests | 10 deterministic tools, `ToolMeasurement`, reproducible tool IDs, `list-regions`; 94 tests reported passed at P2 |
 | **P3 — Evaluation isolation** | DONE (committed) | `evaluation/{fixtures,faults,baselines,score}.py`, `docs/EVALUATION_PROTOCOL.md` | Sealed, reproducible prediction-only suite; evaluator truth isolated; preliminary baseline |
 | **P4 — Real original observation pairing** | DONE (committed) | `data/sombench_adapter.py`, observation catalog, multimodal evaluation | One prediction+TMAX/LPSR/SLOPE fully paired; 11 observation-only tiles; 160 tests reported passed at P4 |
-| **P5 — Genuine agent runtime** | REPORTED DONE; LOCAL / NOT COMMITTED | `agents/`, `swarm/`, `docs/AGENT_RUNTIME.md` | One authentic four-specialist run, 22 model calls / 15 scientific tools / 24 events; cross-agent follow-up with no warranted challenge; tests reported passed; code not independently inspected here |
+| **P5 — Genuine agent runtime** | DONE (committed) | `agents/`, `swarm/`, `docs/AGENT_RUNTIME.md` | One authentic four-specialist run, 22 model calls / 15 scientific tools / 24 events; cross-agent follow-up with no warranted challenge |
+| **P6 — Service, bundles, verifier** | DONE (committed) | `services.py`, `reports/{export,package,verify}.py`, `docs/INVESTIGATION_BUNDLE.md` | Live P6 run (19 calls, 74 991 tokens) exported, verified offline (23 checks) and published public-redacted (`iceclaw-bundle/2`, 26 checks); token reservations; replay |
+| **P7 — Comparative benchmark** | DONE (this release) | `benchmark.py`, `evaluation/paired.py`, `agents/benchmark_arms.py`, `benchmarks/`, `docs/BENCHMARK_P7.md`, `docs/p7_results/` | v1 suite + one-case pilot; pre-registered v2 suite (6 cases) executed once: rules F1 0.857, generalist 0.667, isolated 0.857, communicating 0.667 (1 incomplete case); 213 calls, 815 736 tokens; no challenge/revision; negative, exploratory |
+| **P8 — Streamlit workbench** | DONE (committed) | `app.py`, `ui/`, `docs/WORKBENCH.md` | Real layers, recorded replay, verify, public download; live path tested offline; live UI click not yet exercised |
 
 **P2 input limitations, confirmed by the implementation:** The smoke sector is **partial**: 256×256 decoded model predictions at **238.56 m/pixel**, plus a *tile scalar* PSR fraction and *single-anchor* slope, temperature and shadow metadata. **It has no pixelwise thermal/shadow/slope rasters**. Current thermal and geological tools correctly return `UNAVAILABLE_MODALITY`. Do not treat one anchor as 65,536 observations.
 
 The measured 825 values outside [0,1] are preserved as raw model regression values. Prediction discontinuities/gradients are **model-output screening metrics**, not actual ice discoveries.
 
-**Current Git policy:** P0–P2 are already committed. Before starting P3, verify the local working tree has no unrelated changes. Keep the user's existing `.env` untouched.
+**Current Git policy:** P0–P8 are committed. Keep the user's existing `.env` untouched. `data/` and `runs/` (sources, sealed evaluation material, run logs) stay outside Git; only scored public benchmark summaries, configs, registrations and frozen-output hashes are tracked.
 
 ## 2. Final, fixed architecture
 
@@ -130,7 +134,7 @@ iceclaw.evaluation (hidden answers, fault key, scoring)
 
 ### P5 — Genuine Microsoft Agent Framework specialist collective
 
-**Implementation status:** Reported completed locally but NOT YET COMMITTED. The live run is evidence of authentic cross-agent follow-up, not a live challenge→revision or an improvement over a baseline. Preserve the captured authentic event log and model usage. No reason to force a scientifically unwarranted challenge.
+**Implementation status:** DONE (committed). The live run is evidence of authentic cross-agent follow-up, not a live challenge→revision or an improvement over a baseline. Preserve the captured authentic event log and model usage. No reason to force a scientifically unwarranted challenge.
 
 **Prerequisites:** P3 **and P4 mandatory same-tile data gate**.  
 **Owns:** `src/iceclaw/{agents,swarm}/`, agent integration tests. No UI, no benchmark scoring.
@@ -222,7 +226,7 @@ Do not mistake `--scope published` for a fresh NASA checkpoint inference test.
 | Gate | Required evidence |
 | --- | --- |
 | **G0 P0–P4 (DONE committed)** | P0/P1 real source, 94 P2 tests reported, sealed P3 suite, paired P4 TMAX/LPSR/SLOPE, 160 P4 tests reported |
-| **G0b P5 (DONE reported / uncommitted)** | 215 tests reported passed, 1 opt-in skip; four genuine MAF specialist agents; 22 live model calls and cross-agent follow-up (no live revision) |
+| **G0b P5–P8 (DONE committed)** | 360 tests pass, 1 opt-in live skip; four genuine MAF specialists; verified P6 bundles; pre-registered P7 v2 executed once (negative, exploratory); Streamlit smoke test passed (live UI click pending) |
 | **G1 P3** | Prediction-only sealed benchmark case suite; privacy/firewall regression tests |
 | **G2 P4** | Authentic, spatially aligned TMAX/LPSR/SLOPE TIFFs from matched tile; test on pixelwise data; second region target |
 | **G3 P5** | Real Microsoft Agent Framework event trace and valid agent tool executions |
@@ -255,4 +259,4 @@ For each phase record: exact changed modules, commands actually executed and tes
 - Streamlit: https://docs.streamlit.io/
 - ScienceClaw: https://scienceclawhack.ai/#competition
 
-**Next engineering milestone: commit the reported P5 implementation after staged-diff review, then implement P6. Immediately after P6, ensure a minimal P8 judge-facing UI works before investing heavily in P7 model calls.**
+**Engineering phases complete.** Remaining manual check: one live investigation started from the Streamlit UI on the demo machine (paid; needs the local OpenAI configuration). Any further benchmark requires a new versioned suite and a pre-registration written before the suite is generated.

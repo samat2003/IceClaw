@@ -1,0 +1,5 @@
+arm,case_id,fault_id,is_fault,flagged,outcome,decision_missing,verdicts,suspected_layers,triggered_rules,ended_reason,elapsed_s,tool_calls,llm_calls,input_tokens,output_tokens,total_tokens,events
+deterministic_rules,case-01,clean_float32_roundtrip,False,False,TN,False,{},,,DETERMINISTIC,0.0075,10,0,0,0,0,0
+single_generalist,case-01,clean_float32_roundtrip,False,False,TN,False,"{""generalist"": ""no_fault_found""}",,,QUIESCENT,20.666,16,6,22097,1562,23659,18
+isolated_specialists,case-01,clean_float32_roundtrip,False,False,TN,False,"{""geology"": ""no_fault_found"", ""prediction_auditor"": ""no_fault_found"", ""skeptic"": ""no_fault_found""}",,,BUDGET_EXHAUSTED,11.886,16,16,48553,3296,51849,21
+communicating_specialists,case-01,clean_float32_roundtrip,False,False,TN,False,"{""geology"": ""no_fault_found"", ""prediction_auditor"": ""no_fault_found"", ""skeptic"": ""no_fault_found"", ""thermal"": ""no_fault_found""}",,,BUDGET_EXHAUSTED,14.792,16,15,57032,2882,59914,23

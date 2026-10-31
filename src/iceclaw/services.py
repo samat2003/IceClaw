@@ -1,7 +1,8 @@
 """Application-facing service functions shared by the CLI and (later) the UI.
 
 Catalog listing (P2/P4) and the P6 ``InvestigationService``: run (live), export a recorded
-run, verify offline, replay without any model call. The CLI and a future UI call the same methods.
+run, verify offline, replay without any model call. The CLI and the Streamlit UI call the same
+methods.
 """
 
 from __future__ import annotations
@@ -344,3 +345,151 @@ class InvestigationService:
             f"{mu.get('calls', '?')} calls, {mu.get('total_tokens', '?')} tokens)"
         )
         return ReplayResult(d.name, d, header, lines, len(events))
+
+
+# ======================================================================= P7 scenario adapter
+_OPAQUE_CASE = r"^case-\d{2,3}$"
+SCENARIO_LAYER_UNITS = {
+    "nasa_ibm_prediction_raw": "prospectivity_index",
+    "pixelwise_temperature": "K",
+    "pixelwise_shadow_mask": "fraction",
+    "pixelwise_terrain": "deg",
+}
+
+
+class ScenarioRejected(ValueError):
+    code = "SCENARIO_REJECTED"
+
+
+def check_scenario(scenario: Any) -> tuple[Any, Any]:
+    """Strict allowlist for an opaque benchmark case before ANY agent sees it.
+
+    Reads only ``case_id``, ``context`` (an ``AgentRegionContext``) and ``arrays`` (a
+    ``RegionArrays``). No catalog record, file path, evaluator object or label can pass: the id
+    must be opaque (``case-NN``), every identifier must be the case id or ``<case-id>/<layer>``,
+    and only the four known layers with their established units are accepted.
+    """
+    import re
+
+    from iceclaw.contracts import AgentRegionContext
+    from iceclaw.science.common import RegionArrays
+
+    cid = getattr(scenario, "case_id", None)
+    ctx = getattr(scenario, "context", None)
+    arr = getattr(scenario, "arrays", None)
+    if not isinstance(cid, str) or not re.fullmatch(_OPAQUE_CASE, cid):
+        raise ScenarioRejected(f"case id {cid!r} is not an opaque case-NN id")
+    if not isinstance(ctx, AgentRegionContext) or not isinstance(arr, RegionArrays):
+        raise ScenarioRejected("scenario must carry an AgentRegionContext and RegionArrays")
+    if ctx.region_id != cid or arr.region_id != cid:
+        raise ScenarioRejected("context/arrays region ids must equal the opaque case id")
+    if set(arr.layers) - set(SCENARIO_LAYER_UNITS):
+        raise ScenarioRejected(
+            f"unknown layers {sorted(set(arr.layers) - set(SCENARIO_LAYER_UNITS))}"
+        )
+    if sorted(ctx.available_modalities) != sorted(arr.layers):
+        raise ScenarioRejected("context modalities do not match the arrays")
+    for name, lay in arr.layers.items():
+        if lay.unit != SCENARIO_LAYER_UNITS[name]:
+            raise ScenarioRejected(
+                f"{name}: unit {lay.unit!r} is not {SCENARIO_LAYER_UNITS[name]!r}"
+            )
+        if lay.file_id != f"{cid}/{name}.values.npy":
+            raise ScenarioRejected(f"{name}: file id {lay.file_id!r} is not an opaque case file id")
+        if not re.fullmatch(r"[0-9a-f]{64}", lay.sha256 or ""):
+            raise ScenarioRejected(f"{name}: sha256 is not a hex digest")
+        if lay.values.shape != (ctx.height, ctx.width):
+            raise ScenarioRejected(f"{name}: shape {lay.values.shape} != context grid")
+    expected_ids = sorted(f"{cid}/{n}.values.npy" for n in arr.layers)
+    if sorted(ctx.source_ids) != expected_ids:
+        raise ScenarioRejected("context source ids must be exactly the case's layer file ids")
+    return ctx, arr
+
+
+@dataclass
+class ScenarioRunResult:
+    case_id: str
+    arm: str
+    run_dir: Path
+    investigation_id: str
+    summary: dict[str, Any]
+    assessments: dict[str, dict[str, Any]]
+    assessment_history: list[dict[str, Any]]
+
+
+def investigate_scenario(
+    service: InvestigationService,
+    scenario: Any,
+    *,
+    arm: str,
+    budget: RunBudget,
+    max_input_tokens: int,
+    out_dir: Path,
+    reserve: Any = None,
+) -> ScenarioRunResult:
+    """Run ONE LLM arm on ONE opaque case in a brand-new runtime, store and set of clients.
+
+    Uses the same ``SwarmRuntime`` permissions, budgets and recording as live investigations;
+    the arm decides only team structure (see ``agents.benchmark_arms``). ``budget`` and
+    ``max_input_tokens`` are the arm's TOTAL budget for the case (never multiplied per agent).
+    ``reserve`` (P7 v2, an ``AgentReserve``) guarantees each agent of a MULTI-agent arm a minimum
+    share of those same totals; it is ignored for a single agent, which owns the whole budget.
+    """
+    from uuid import uuid4
+
+    from iceclaw.agents.benchmark_arms import arm_plan, build_arm_runners, build_benchmark_prompt
+    from iceclaw.agents.provider import build_openai_client
+    from iceclaw.swarm.runtime import RunLimits, SwarmRuntime
+    from iceclaw.swarm.store import EvidenceStore
+
+    ctx, arrays = check_scenario(scenario)
+    scripted = service.client_factory is not None
+    if not scripted:
+        service.settings.require_live_llm()
+    plan = arm_plan(arm, budget.max_llm_calls)
+    ctx = ctx.model_copy(update={"budget": budget})
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=False)  # a fresh directory per (arm, case) run
+    limits = RunLimits(
+        budget=budget,
+        max_rounds_per_agent=plan.max_rounds_per_agent,
+        max_roundtrips_per_turn=plan.max_roundtrips_per_turn,
+        max_function_calls_per_turn=plan.max_function_calls_per_turn,
+        max_input_tokens=max_input_tokens,
+        reserve=reserve if len(plan.specs) > 1 else None,
+    )
+    store = EvidenceStore(out_dir / "events.sqlite")
+    st_ = service.settings
+    provider = service.provider_label or ("scripted" if scripted else st_.llm_provider)
+    model = service.model_label or ("scripted-v0" if scripted else (st_.llm_model or ""))
+    inv_id = f"bench-{arm}-{ctx.region_id}-{uuid4().hex[:8]}"
+    rt = SwarmRuntime(
+        investigation_id=inv_id,
+        context=ctx,
+        arrays=arrays,
+        store=store,
+        specs=list(plan.specs),
+        limits=limits,
+        provider=provider,
+        model=model,
+        communication=plan.communication,
+        require_assessment=True,
+    )
+    factory = service.client_factory or (
+        lambda runtime, aid: build_openai_client(service.settings, runtime, aid, limits)
+    )
+    try:
+        summary = asyncio.run(rt.run(build_arm_runners(rt, factory), build_benchmark_prompt))
+        rt.write_outputs(out_dir, summary)
+    finally:
+        store.close()
+    sdict = {**summary.__dict__, "provider": provider, "model": model}
+    return ScenarioRunResult(
+        ctx.region_id,
+        arm,
+        out_dir,
+        inv_id,
+        sdict,
+        {k: dict(v) for k, v in rt.assessments.items()},
+        list(rt.assessment_history),
+    )

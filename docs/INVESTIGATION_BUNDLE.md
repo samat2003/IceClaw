@@ -4,7 +4,7 @@ Everything here is implemented and tested; numbers come from recorded runs. The 
 screening statistics on a prospectivity index: no bundle, report or ranking detects, confirms or
 quantifies lunar ice, and the research-priority ranking is **not** a probability of ice.
 
-## 1. Commands (CLI and a future UI call the same `InvestigationService`)
+## 1. Commands (the CLI and the Streamlit UI call the same `InvestigationService`)
 
 ```bash
 python -m iceclaw.cli investigate --region ice-s-0001-0002   # live agents -> exported + verified bundle

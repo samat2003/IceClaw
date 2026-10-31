@@ -211,13 +211,18 @@ def rich_policies() -> dict[str, Any]:
 
 
 def scripted_service(
-    runs_root: Path, spec_root: Path, policies=None, emit_reasoning: bool = False
+    runs_root: Path,
+    spec_root: Path,
+    policies=None,
+    emit_reasoning: bool = False,
+    latency_s: float = 0.0,
 ) -> InvestigationService:
     pol = policies or rich_policies()
 
     def factory(rt, aid):
         c = ScriptedChatClient(pol[aid], aid)
         c.emit_reasoning = emit_reasoning
+        c.latency_s = latency_s
         c.bind(rt, aid)
         return c
 

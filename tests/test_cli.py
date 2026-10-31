@@ -12,11 +12,12 @@ def test_help_lists_commands(capsys):
         assert c in out
 
 
-@pytest.mark.parametrize("argv", [["benchmark", "--config", "c.json"]])  # P7
-def test_not_implemented(argv, capsys):
-    assert main(argv) == NOT_IMPLEMENTED_EXIT
+def test_benchmark_is_implemented_since_p7(capsys):
+    # P7 replaced the placeholder: a missing config is a specific error, not NOT_IMPLEMENTED
+    assert main(["benchmark", "--config", "/nonexistent/c.json"]) == 1
     cap = capsys.readouterr()
-    assert "NOT_IMPLEMENTED" in cap.err and cap.out == ""
+    assert "CONFIG_NOT_FOUND" in cap.err and "NOT_IMPLEMENTED" not in cap.err
+    assert NOT_IMPLEMENTED_EXIT == 2  # the exit code constant remains for future placeholders
 
 
 def test_investigate_and_verify_are_implemented_not_placeholders(capsys):

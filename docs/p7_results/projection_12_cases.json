@@ -1,0 +1,64 @@
+{
+ "n_cases": 12,
+ "llm_arms": [
+  "single_generalist",
+  "isolated_specialists",
+  "communicating_specialists"
+ ],
+ "upper_bound": {
+  "model_calls": 576,
+  "input_tokens_cap": 2304000,
+  "note": "input cap is enforced per case by pre-call reservation (estimate-based); output tokens are additional (soft)"
+ },
+ "pilot_projection": {
+  "single_generalist": {
+   "per_case": {
+    "elapsed_s": 20.666,
+    "events": 18.0,
+    "input_tokens": 22097.0,
+    "llm_calls": 6.0,
+    "output_tokens": 1562.0,
+    "tool_calls": 16.0,
+    "total_tokens": 23659.0
+   },
+   "projected_model_calls": 72.0,
+   "projected_total_tokens": 283908.0,
+   "projected_elapsed_s": 247.99200000000002
+  },
+  "isolated_specialists": {
+   "per_case": {
+    "elapsed_s": 11.886,
+    "events": 21.0,
+    "input_tokens": 48553.0,
+    "llm_calls": 16.0,
+    "output_tokens": 3296.0,
+    "tool_calls": 16.0,
+    "total_tokens": 51849.0
+   },
+   "projected_model_calls": 192.0,
+   "projected_total_tokens": 622188.0,
+   "projected_elapsed_s": 142.632
+  },
+  "communicating_specialists": {
+   "per_case": {
+    "elapsed_s": 14.792,
+    "events": 23.0,
+    "input_tokens": 57032.0,
+    "llm_calls": 15.0,
+    "output_tokens": 2882.0,
+    "tool_calls": 16.0,
+    "total_tokens": 59914.0
+   },
+   "projected_model_calls": 180.0,
+   "projected_total_tokens": 718968.0,
+   "projected_elapsed_s": 177.504
+  }
+ },
+ "all_llm_arms_per_case": {
+  "llm_calls": 37.0,
+  "total_tokens": 135422.0,
+  "input_tokens": 127682.0,
+  "output_tokens": 7740.0,
+  "elapsed_s": 47.344
+ }
+}

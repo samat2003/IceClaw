@@ -1,0 +1,2 @@
+arm,n_cases,n_fault_cases,n_clean_cases,tp,fp,fn,tn,precision,recall,f1,false_positive_rate,frozen_sha256,decision_missing,total_elapsed_s,total_tool_calls,total_llm_calls,total_input_tokens,total_output_tokens,total_total_tokens,total_events
+deterministic_rules,12,8,4,6,0,2,4,1.0,0.75,0.8571428571428571,0.0,7b0fcefd81200ffcb15d26b99682299a45ab3765951a4aae7d62e89b39f4d6de,0,0.034899999999999994,120.0,0.0,0.0,0.0,0.0,0.0

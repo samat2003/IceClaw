@@ -1,0 +1,62 @@
+{
+ "arms": {
+  "deterministic_rules": {
+   "decision_missing": 0,
+   "declared_subset": null,
+   "expectation_check": {
+    "mismatches_vs_preregistered": []
+   },
+   "f1": 0.8571428571428571,
+   "false_positive_rate": 0.0,
+   "fn": 2,
+   "fp": 0,
+   "frozen_sha256": "7b0fcefd81200ffcb15d26b99682299a45ab3765951a4aae7d62e89b39f4d6de",
+   "n_cases": 12,
+   "n_clean_cases": 4,
+   "n_fault_cases": 8,
+   "precision": 1.0,
+   "recall": 0.75,
+   "tn": 4,
+   "tp": 6,
+   "usage_mean_per_case": {
+    "elapsed_s": 0.0029083333333333326,
+    "events": 0.0,
+    "input_tokens": 0.0,
+    "llm_calls": 0.0,
+    "output_tokens": 0.0,
+    "tool_calls": 10.0,
+    "total_tokens": 0.0
+   },
+   "usage_total": {
+    "elapsed_s": 0.034899999999999994,
+    "events": 0.0,
+    "input_tokens": 0.0,
+    "llm_calls": 0.0,
+    "output_tokens": 0.0,
+    "tool_calls": 120.0,
+    "total_tokens": 0.0
+   }
+  }
+ },
+ "budget_per_case_and_arm": {
+  "max_events": 48,
+  "max_hops": 5,
+  "max_input_tokens": 64000,
+  "max_llm_calls": 16,
+  "max_tool_calls": 16,
+  "timeout_s": 360.0
+ },
+ "caveats": [
+  "All cases are copies of ONE genuine paired tile (ice-s-0001-0002); cases share pixels and are not independent samples. Results do not generalize to other regions or to the Moon.",
+  "Faults are synthetic corruptions of genuine data, not real lunar anomalies.",
+  "The statistical unit is the case, never the pixel; no confidence intervals are reported.",
+  "Metrics over a declared subset (e.g. a one-case pilot) are feasibility checks, not a performance comparison.",
+  "Token counts are provider-reported; no price is applied (unpriced).",
+  "Fault expectations were pre-registered by the author of the deterministic baseline; they are a plumbing check, not an independent difficulty estimate."
+ ],
+ "config_sha256": "1a6047ac4711deae63c724271854c2ef08f8acf8e9299de6462e7480ff882438",
+ "decision_rule": "A case is FLAGGED iff at least one agent's LATEST submit_assessment verdict is 'fault_suspected' (every assessment cites >= 1 measurement event). If no agent filed an assessment the case is NOT flagged and is reported as decision_missing. The deterministic baseline flags a case iff any pre-registered rule triggers (PairedBaselineConfig).",
+ "format": "iceclaw-p7-benchmark/1",
+ "scored_utc": "2026-10-31T21:37:29.782950+00:00",
+ "suite_id": "p7-paired-v1"
+}

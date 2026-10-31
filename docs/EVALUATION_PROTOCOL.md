@@ -124,3 +124,9 @@ equals the control's noise) is a mis-specified v1 tolerance. v1 and its frozen r
 unchanged. `ObsBaselineConfigV2` (shadow tolerance 1e-4) is a **new version** not scored on the
 sealed `p4-multimodal-v1` labels; comparative claims need a new suite frozen after it. See
 `docs/AGENT_RUNTIME.md` §6.
+
+## 8. P7 addendum: paired-tile suite `p7-paired-v1` and four-arm comparison
+
+A third, independently frozen suite built from copies of the one paired tile (prediction + TMAX +
+LPSR + SLOPE), 4 clean controls + 8 faults, private random seed; P3/P4 suites unchanged. Arms,
+budgets, decision rule, pilot and baseline results: [BENCHMARK_P7.md](BENCHMARK_P7.md).

@@ -1,0 +1,5 @@
+arm,n_cases,n_fault_cases,n_clean_cases,tp,fp,fn,tn,precision,recall,f1,false_positive_rate,frozen_sha256,decision_missing,incomplete_cases,incomplete_individual_verdicts,total_elapsed_s,total_tool_calls,total_llm_calls,total_input_tokens,total_output_tokens,total_total_tokens,total_events
+deterministic_rules,6,4,2,3,0,1,2,1.0,0.75,0.8571428571428571,0.0,4387398c78ab8bff0fcc915e66cd026714969fed33076f06320015b90633aa8f,0,0,0,0.022399999999999996,60.0,0.0,0.0,0.0,0.0,0.0
+single_generalist,6,4,2,2,0,2,2,1.0,0.5,0.6666666666666666,0.0,c696957bd79f2839563f2966ced627b47eed15dabfaa42201f0fd214d15b4877,0,0,0,143.176,93.0,39.0,160234.0,10352.0,170586.0,107.0
+isolated_specialists,6,4,2,3,0,1,2,1.0,0.75,0.8571428571428571,0.0,4387398c78ab8bff0fcc915e66cd026714969fed33076f06320015b90633aa8f,0,0,0,79.911,96.0,87.0,275548.0,18064.0,293612.0,119.0
+communicating_specialists,6,4,2,2,0,2,2,1.0,0.5,0.6666666666666666,0.0,c696957bd79f2839563f2966ced627b47eed15dabfaa42201f0fd214d15b4877,1,1,2,111.356,87.0,87.0,333355.0,18183.0,351538.0,125.0

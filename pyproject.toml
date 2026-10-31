@@ -56,3 +56,6 @@ select = ["E", "F", "I", "UP", "B"]
 # UI prose / UI strings
 "app.py" = ["E501"]
 "src/iceclaw/ui/*.py" = ["E501"]
+# P7 fault registry table and benchmark report prose
+"src/iceclaw/evaluation/paired.py" = ["E501"]
+"src/iceclaw/benchmark.py" = ["E501"]

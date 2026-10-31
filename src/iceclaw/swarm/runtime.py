@@ -92,6 +92,22 @@ class AgentSpec:
     wake_on_claims: bool = False  # woken by other agents' claims/revisions (else only if concerned)
 
 
+@dataclass(frozen=True)
+class AgentReserve:
+    """P7 v2: a minimum share of the SHARED budget guaranteed to EACH agent of a run.
+
+    While an agent has not filed its assessment (and has not exited) the unused part of its
+    reserve is withheld from every other agent; it returns to the common pool as soon as the
+    agent files its first assessment or exits. Totals never change: reserves are carved out of
+    the same overall limits. ``assessment_events`` keeps event slots free for each agent's
+    assessment even when other agents have used up the event budget."""
+
+    llm_calls: int = 0
+    tool_calls: int = 0
+    input_tokens: int = 0
+    assessment_events: int = 1
+
+
 @dataclass
 class RunLimits:
     budget: RunBudget
@@ -103,6 +119,8 @@ class RunLimits:
     max_total_tokens: int | None = None
     digest_max_chars: int = 5000  # bounded evidence digest per turn
     max_prompt_chars: int = 9000  # hard cap on the per-turn user message
+    # P7 v2 (None = P5/P6/P7-v1 behaviour): per-agent guaranteed minimum of the shared budget
+    reserve: AgentReserve | None = None
 
 
 class TurnRunner(Protocol):
@@ -121,6 +139,7 @@ class AgentState:
     own_event_ids: list[str] = field(default_factory=list)
     wake: asyncio.Event = field(default_factory=asyncio.Event)
     failures: int = 0
+    final_call: bool = False  # P7 v2: one guaranteed turn to assess before the run ends
 
 
 @dataclass
@@ -196,7 +215,14 @@ class SwarmRuntime:
         limits: RunLimits,
         provider: str = "unspecified",
         model: str = "unspecified",
+        communication: bool = True,
+        require_assessment: bool = False,
     ) -> None:
+        """``communication=False`` (P7 isolated arm): no event reaches another agent, agents can
+        neither read nor cite each other's events, and challenges / test requests are refused.
+        ``require_assessment=True`` (P7 benchmark): each agent must file one machine-readable
+        assessment via ``submit_assessment``; an agent that ends a turn without one is woken
+        again (bounded by ``max_rounds_per_agent``). Defaults keep P5/P6 behaviour unchanged."""
         if len({s.agent_id for s in specs}) != len(specs) or SUPERVISOR in {
             s.agent_id for s in specs
         }:
@@ -221,6 +247,70 @@ class SwarmRuntime:
         self._finished = False
         self._ended_reason = "RUNNING"
         self._dedup: dict[tuple, str] = {}
+        self.communication = communication
+        self.require_assessment = require_assessment
+        self.assessments: dict[str, dict[str, Any]] = {}  # agent -> latest assessment
+        self.assessment_history: list[dict[str, Any]] = []
+        self._granted: dict[str, set[str]] = {s.agent_id: set() for s in specs}
+        # P7 v2 reserve accounting (all zero / unused when limits.reserve is None)
+        self._calls_by_agent: dict[str, int] = {s.agent_id: 0 for s in specs}
+        self._tools_by_agent: dict[str, int] = {s.agent_id: 0 for s in specs}
+        self._inflight_owner: dict[int, str] = {}
+        self._released: set[str] = set()
+
+    # ------------------------------------------------------------ P7 v2 reserves
+    def _outstanding(self, agent: str, kind: str) -> int:
+        """Unused part of ``agent``'s reserve of ``kind`` that is still withheld from others."""
+        r = self.limits.reserve
+        if r is None or agent not in self.state or agent in self._released:
+            return 0
+        if self.state[agent].exited:
+            return 0
+        if kind == "llm":
+            return max(0, r.llm_calls - self._calls_by_agent[agent])
+        if kind == "tool":
+            return max(0, r.tool_calls - self._tools_by_agent[agent])
+        if kind == "tokens":
+            used = self.tokens_by_agent.get(agent, {}).get("input", 0) + sum(
+                est for rid, est in self._inflight.items() if self._inflight_owner.get(rid) == agent
+            )
+            return max(0, r.input_tokens - used)
+        if kind == "assess_event":
+            return r.assessment_events if agent not in self.assessments else 0
+        raise ValueError(kind)
+
+    def held_by_others(self, agent: str, kind: str) -> int:
+        return sum(self._outstanding(b, kind) for b in self.specs if b != agent)
+
+    def available_to(self, agent: str) -> dict[str, Any]:
+        """What ``agent`` can still spend now (its own reserve + the common pool)."""
+        b, lim = self.limits.budget, self.limits
+        out: dict[str, Any] = {
+            "model_calls": max(
+                0, b.max_llm_calls - self.llm_calls - self.held_by_others(agent, "llm")
+            ),
+            "tool_calls": max(
+                0, b.max_tool_calls - self.tool_calls - self.held_by_others(agent, "tool")
+            ),
+        }
+        if lim.max_input_tokens is not None:
+            out["input_tokens"] = max(
+                0,
+                lim.max_input_tokens
+                - self.tokens["input"]
+                - self.reserved_input_tokens
+                - self.held_by_others(agent, "tokens"),
+            )
+        return out
+
+    def _release_reserve(self, agent: str) -> None:
+        self._released.add(agent)
+
+    def visible(self, viewer: str | None, e: EvidenceEvent) -> bool:
+        """Whether ``viewer`` may read/cite ``e`` (always true with communication on)."""
+        if viewer is None or self.communication:
+            return True
+        return e.agent_id == viewer or e.event_id in self._granted.get(viewer, set())
 
     # ---------------------------------------------------------------- publishing
     def _next_id(self) -> str:
@@ -234,8 +324,14 @@ class SwarmRuntime:
         parents: list[str] = list(dict.fromkeys(fields.get("parent_event_ids") or []))
         fields["parent_event_ids"] = parents
         supervisor = agent_id == SUPERVISOR
-        if not supervisor and self.store.count_events() >= self.limits.budget.max_events:
-            return None, _err("EVENT_BUDGET_EXHAUSTED", "no events left; stop and conclude")
+        if not supervisor:
+            is_assessment = kind is EventKind.COMPLETION and (
+                fields.get("claim_or_request") or ""
+            ).startswith(self.ASSESSMENT_PREFIX)
+            held = self.held_by_others(agent_id, "assess_event")
+            own = 0 if is_assessment else self._outstanding(agent_id, "assess_event")
+            if self.store.count_events() + 1 + held + own > self.limits.budget.max_events:
+                return None, _err("EVENT_BUDGET_EXHAUSTED", "no events left; stop and conclude")
         parent_hops = []
         for pid in parents:
             h = self.store.hop_of(pid)
@@ -280,6 +376,8 @@ class SwarmRuntime:
 
     def _deliver(self, event: EvidenceEvent) -> None:
         """Hand the event to every other agent's inbox; wake only those it concerns."""
+        if not self.communication:
+            return  # isolated agents never receive each other's events
         wake: set[str] = set()
         if event.event_kind in (EventKind.CLAIM, EventKind.REVISION):
             wake = {a for a, sp in self.specs.items() if sp.wake_on_claims} - {event.agent_id}
@@ -398,11 +496,14 @@ class SwarmRuntime:
             parents, kind = [in_response_to], EventKind.TEST_RESULT
         if self._finished:
             return _err("RUN_ENDED", "the investigation has ended")
-        if self.tool_calls >= self.limits.budget.max_tool_calls:
+        if self.tool_calls + 1 + self.held_by_others(agent_id, "tool") > (
+            self.limits.budget.max_tool_calls
+        ):
             return _err(
                 "TOOL_BUDGET_EXHAUSTED", "no tool calls left; publish what you have and conclude"
             )
         self.tool_calls += 1
+        self._tools_by_agent[agent_id] = self._tools_by_agent.get(agent_id, 0) + 1
         try:
             m = run_tool(self.arrays, tool_id, **kwargs)
         except ScienceToolError as e:
@@ -419,7 +520,12 @@ class SwarmRuntime:
             return perr or {"ok": False, "error": e.code, "event_id": ev.event_id if ev else None}
         cached = self.store.get_tool_run(m.tool_run_id)
         if cached:  # deterministic dedup: identical tool+params+source already measured
-            self.tool_calls -= 1
+            owner = self.store.get_event(cached[1])
+            if self.communication or (owner is not None and owner.agent_id == agent_id):
+                self.tool_calls -= 1  # free only when the agent could already see it
+                self._tools_by_agent[agent_id] -= 1
+            else:
+                self._granted[agent_id].add(cached[1])  # same number it asked for; charged
             return {
                 "ok": True,
                 "cached": True,
@@ -445,7 +551,9 @@ class SwarmRuntime:
             else [],
         )
         if perr:
-            self.tool_calls -= 1 if perr["error"] != "DUPLICATE" else 0
+            refund = 1 if perr["error"] != "DUPLICATE" else 0
+            self.tool_calls -= refund
+            self._tools_by_agent[agent_id] -= refund
             return perr
         assert ev is not None
         self.store.append_tool_run(m, agent_id, ev.event_id, self.investigation_id)
@@ -481,9 +589,15 @@ class SwarmRuntime:
         got = self.store.get_tool_run(tool_run_id)
         if got is None:
             return _err("UNKNOWN_TOOL_RUN", tool_run_id)
-        if self.tool_calls >= self.limits.budget.max_tool_calls:
+        src_event = self.store.get_event(got[1])
+        if src_event is None or not self.visible(agent_id, src_event):
+            return _err("UNKNOWN_TOOL_RUN", tool_run_id)
+        if self.tool_calls + 1 + self.held_by_others(agent_id, "tool") > (
+            self.limits.budget.max_tool_calls
+        ):
             return _err("TOOL_BUDGET_EXHAUSTED", "no tool calls left")
         self.tool_calls += 1
+        self._tools_by_agent[agent_id] = self._tools_by_agent.get(agent_id, 0) + 1
         original, orig_event, _ = got
         try:
             again = recompute(original, self.arrays)
@@ -505,6 +619,7 @@ class SwarmRuntime:
         )
         if perr:
             self.tool_calls -= 1
+            self._tools_by_agent[agent_id] -= 1
             return perr
         assert ev is not None
         self.store.append_tool_run(
@@ -521,11 +636,13 @@ class SwarmRuntime:
         }
 
     # ---------------------------------------------------- actions: claims / debate
-    def _existing(self, ids: list[str] | None) -> tuple[list[EvidenceEvent], dict | None]:
+    def _existing(
+        self, ids: list[str] | None, viewer: str | None = None
+    ) -> tuple[list[EvidenceEvent], dict | None]:
         out = []
         for i in dict.fromkeys(ids or []):
             e = self.store.get_event(i)
-            if e is None:
+            if e is None or not self.visible(viewer, e):
                 return [], _err("UNKNOWN_EVENT", f"event {i!r} does not exist")
             out.append(e)
         return out, None
@@ -557,7 +674,7 @@ class SwarmRuntime:
             return _err("BAD_ENUM", str(e))
         if hs is HypothesisStatus.CHALLENGED:
             return _err("BAD_ENUM", "status 'challenged' is set only by challenges")
-        cited, err = self._existing(cites)
+        cited, err = self._existing(cites, agent_id)
         if err:
             return err
         if et is not EvidenceType.HYPOTHESIS and not any(
@@ -590,6 +707,8 @@ class SwarmRuntime:
         alternatives: list[str] | None = None,
         limitations: list[str] | None = None,
     ) -> dict[str, Any]:
+        if not self.communication:
+            return _err("COMMUNICATION_DISABLED", "agents work in isolation in this run")
         target = self.store.get_event(target_event_id)
         if target is None:
             return _err("UNKNOWN_EVENT", f"event {target_event_id!r} does not exist")
@@ -604,7 +723,7 @@ class SwarmRuntime:
             EventKind.COMPLETION,
         ):
             return _err("BAD_TARGET", f"cannot challenge a {target.event_kind.value} event")
-        cited, err = self._existing(evidence_ids)
+        cited, err = self._existing(evidence_ids, agent_id)
         if err:
             return err
         ev, perr = self._publish(
@@ -633,6 +752,8 @@ class SwarmRuntime:
         cites: list[str] | None = None,
         **params: Any,
     ) -> dict[str, Any]:
+        if not self.communication:
+            return _err("COMMUNICATION_DISABLED", "agents work in isolation in this run")
         if to_agent == agent_id or to_agent not in self.specs:
             return _err(
                 "BAD_ADDRESSEE",
@@ -643,7 +764,7 @@ class SwarmRuntime:
         )
         if err:
             return {**err, "message": f"{err['message']} (for addressee {to_agent})"}
-        cited, cerr = self._existing(cites)
+        cited, cerr = self._existing(cites, agent_id)
         if cerr:
             return cerr
         body = json.dumps(
@@ -691,7 +812,7 @@ class SwarmRuntime:
             hs = HypothesisStatus(status)
         except ValueError as e:
             return _err("BAD_ENUM", str(e))
-        cited, err = self._existing(new_evidence_ids)
+        cited, err = self._existing(new_evidence_ids, agent_id)
         if err:
             return err
         old_seq = self.store.seq_of(revised_event_id) or 0
@@ -706,7 +827,7 @@ class SwarmRuntime:
                 "a revision must cite at least one measurement/test_result event "
                 "published AFTER the claim it revises",
             )
-        resp, rerr = self._existing(responding_to)
+        resp, rerr = self._existing(responding_to, agent_id)
         if rerr:
             return rerr
         parents = [revised_event_id, *[e.event_id for e in cited], *[e.event_id for e in resp]]
@@ -735,7 +856,7 @@ class SwarmRuntime:
             hs = HypothesisStatus(status)
         except ValueError as e:
             return _err("BAD_ENUM", str(e))
-        cited, err = self._existing(cites)
+        cited, err = self._existing(cites, agent_id)
         if err:
             return err
         ev, perr = self._publish(
@@ -748,6 +869,65 @@ class SwarmRuntime:
             evidence_type=EvidenceType.HYPOTHESIS,
         )
         return perr or {"ok": True, "event_id": ev.event_id}  # type: ignore[union-attr]
+
+    # ------------------------------------------------------- P7 benchmark assessment
+    ASSESSMENT_PREFIX = "ASSESSMENT "
+    VERDICTS = ("fault_suspected", "no_fault_found")
+
+    def submit_assessment(
+        self,
+        agent_id: str,
+        verdict: str,
+        suspected_layers: list[str] | None,
+        cites: list[str] | None,
+        rationale: str,
+    ) -> dict[str, Any]:
+        """File (or replace) this agent's machine-readable case assessment as a completion event.
+
+        The event text is ``ASSESSMENT {json}`` followed by the rationale; the JSON part is the
+        pre-registered decision record parsed by the benchmark runner."""
+        if not self.require_assessment:
+            return _err("NOT_A_BENCHMARK_RUN", "assessments are only used in benchmark runs")
+        if verdict not in self.VERDICTS:
+            return _err("BAD_ENUM", f"verdict must be one of {list(self.VERDICTS)}")
+        layers = sorted(dict.fromkeys(suspected_layers or []))
+        unknown = [x for x in layers if x not in self.context.available_modalities]
+        if unknown:
+            return _err(
+                "BAD_LAYER", f"unknown layers {unknown}", allowed=self.context.available_modalities
+            )
+        if verdict == "fault_suspected" and not layers:
+            return _err("BAD_LAYER", "name at least one suspected layer for fault_suspected")
+        cited, err = self._existing(cites, agent_id)
+        if err:
+            return err
+        if not [e for e in cited if e.event_kind in EVIDENCE_KINDS]:
+            return _err("NO_EVIDENCE", "cite at least one measurement/test_result event id")
+        record = {"verdict": verdict, "suspected_layers": layers}
+        text = self.ASSESSMENT_PREFIX + json.dumps(record, sort_keys=True) + " | " + rationale
+        ev, perr = self._publish(
+            agent_id,
+            EventKind.COMPLETION,
+            parent_event_ids=[e.event_id for e in cited],
+            claim_or_request=_clip(text),
+            hypothesis_status=HypothesisStatus.SUPPORTED
+            if verdict == "fault_suspected"
+            else HypothesisStatus.UNRESOLVED,
+            evidence_type=EvidenceType.HYPOTHESIS,
+        )
+        if perr:
+            return perr
+        assert ev is not None
+        entry = {
+            **record,
+            "agent_id": agent_id,
+            "event_id": ev.event_id,
+            "cites": [e.event_id for e in cited],
+        }
+        self.assessments[agent_id] = entry
+        self.assessment_history.append(entry)
+        self._release_reserve(agent_id)  # its unused reserve returns to the common pool
+        return {"ok": True, "event_id": ev.event_id}
 
     # ------------------------------------------------------------------ reading
     def describe_event(self, e: EvidenceEvent) -> str:
@@ -798,12 +978,14 @@ class SwarmRuntime:
         for _, e in self.store.events(since or 0):
             if kinds and e.event_kind.value not in kinds:
                 continue
+            if not self.visible(agent_id, e):
+                continue
             out.append(self.compact_event(e))
         return out[-15:]  # bounded; get_event returns one event in full
 
-    def get_event_detail(self, event_id: str) -> dict[str, Any]:
+    def get_event_detail(self, event_id: str, viewer: str | None = None) -> dict[str, Any]:
         e = self.store.get_event(event_id)
-        if e is None:
+        if e is None or not self.visible(viewer, e):
             return _err("UNKNOWN_EVENT", event_id)
         out: dict[str, Any] = {
             "ok": True,
@@ -844,21 +1026,27 @@ class SwarmRuntime:
         """
         if self._finished:
             raise BudgetExhausted("RUN_ENDED")
-        if self.llm_calls >= self.limits.budget.max_llm_calls:
+        if self.llm_calls + 1 + self.held_by_others(agent_id, "llm") > (
+            self.limits.budget.max_llm_calls
+        ):
             raise BudgetExhausted("LLM_CALLS")
         lim = self.limits
         est = self.estimate_input_tokens(measure_chars) if measure_chars else 0
         reserved = self.reserved_input_tokens
         if lim.max_input_tokens is not None:
-            if self.tokens["input"] + reserved + est > lim.max_input_tokens:
+            held = self.held_by_others(agent_id, "tokens")
+            if self.tokens["input"] + reserved + est + held > lim.max_input_tokens:
                 raise BudgetExhausted("INPUT_TOKENS")
         if lim.max_total_tokens is not None:
             allowance = OUTPUT_ALLOWANCE_TOKENS * (len(self._inflight) + 1)
             if self.tokens["total"] + reserved + est + allowance > lim.max_total_tokens:
                 raise BudgetExhausted("TOTAL_TOKENS")
         self.llm_calls += 1
+        if agent_id in self._calls_by_agent:
+            self._calls_by_agent[agent_id] += 1
         self._res_seq += 1
         self._inflight[self._res_seq] = est
+        self._inflight_owner[self._res_seq] = agent_id
         self.peak_inflight = max(self.peak_inflight, len(self._inflight))
         return self._res_seq
 
@@ -866,6 +1054,7 @@ class SwarmRuntime:
         """Release a reservation (idempotent); called on completion, error and cancellation."""
         if reservation is not None:
             self._inflight.pop(reservation, None)
+            self._inflight_owner.pop(reservation, None)
 
     def llm_record(
         self,
@@ -916,6 +1105,21 @@ class SwarmRuntime:
             return
         active = [s for s in self.state.values() if not s.exited]
         if all(not s.busy and not s.pending_first and not s.wake_pending for s in active):
+            if self.require_assessment and self.limits.reserve is not None:
+                late = [
+                    (a, s)
+                    for a, s in self.state.items()
+                    if not s.exited
+                    and a not in self.assessments
+                    and not s.final_call
+                    and s.rounds < self.limits.max_rounds_per_agent
+                ]
+                if late:  # P7 v2: every agent gets one turn to assess before the run ends
+                    for _, s in late:
+                        s.final_call = True
+                        s.wake_pending = True
+                        s.wake.set()
+                    return
             self._end(reason)
 
     def _end(self, reason: str) -> None:
@@ -942,7 +1146,9 @@ class SwarmRuntime:
             if st.rounds >= self.limits.max_rounds_per_agent:
                 st.exit_reason = "MAX_ROUNDS"
                 break
-            if self.llm_calls >= self.limits.budget.max_llm_calls:
+            if self.llm_calls + self.held_by_others(spec.agent_id, "llm") >= (
+                self.limits.budget.max_llm_calls
+            ):
                 st.exit_reason = "LLM_BUDGET"
                 break
             new, st.inbox = st.inbox, []
@@ -955,6 +1161,14 @@ class SwarmRuntime:
                 st.rounds += 1
             if st.exit_reason:
                 break
+            if (
+                self.require_assessment
+                and spec.agent_id not in self.assessments
+                and not self._finished
+                and st.rounds < self.limits.max_rounds_per_agent
+            ):
+                st.wake_pending = True  # same rule for every arm: one more turn to assess
+                st.wake.set()
             self._maybe_finish()
         st.exited, st.pending_first, st.wake_pending, st.busy = True, False, False, False
         self._maybe_finish()

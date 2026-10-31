@@ -1,0 +1,27 @@
+{
+ "arm": "deterministic_rules",
+ "config_sha256": "663766aa59f122e32770062defafbb401dc91c0f4d8298776c533b7fc5c19dc3",
+ "frozen": {
+  "declared_subset": [
+   "case-01"
+  ],
+  "flags": [
+   [
+    "case-01",
+    false
+   ]
+  ],
+  "sha256": "5bd9ff31993fd6dd3d0a006ecadbbb6057155faf0cc9da76bdefd7249ce39b1a",
+  "suite_manifest_sha256": "28035f1e773d430975af6c3e531e5543ed764d218b3016c154150b90f0378796"
+ },
+ "frozen_utc": "2026-10-31T21:36:26.087723+00:00",
+ "output_file_sha256": {
+  "case-01": {
+   "decision.json": "b96f213d9a034a64169a5e296f756845c44692f777c84eb527d4d1bffd2f9d4e",
+   "events.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "llm_calls.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "run_summary.json": "3b5fce43b2224d42f37ddf4eadd8b1666dab7b6685f206f698dd4184b8f1c860",
+   "tool_runs.json": "9e511fa23267041fcb06f6087e4d98e8bd0ffceaa1ecca5b9bbe59ed510871ea"
+  }
+ }
+}

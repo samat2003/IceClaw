@@ -52,14 +52,11 @@ def make_tools(runtime: SwarmRuntime, spec: AgentSpec) -> list[Any]:
     @tool(
         name="run_science_tool",
         description=(
-            "Run ONE approved deterministic IceClaw science tool on the region and publish "
-            "the result "
-            f"as an evidence event. Your tools: {tools_txt}. Your layers: {mods_txt}. "
-            "tool_id and modality are required except thermal_psr_consistency / "
-            "terrain_slope_summary "
-            "(fixed layers; omit modality). Optional window=[row0,row1,col0,col1] (native pixels, "
-            "half-open). Identical calls return the cached event instead of costing budget. "
-            "Set in_response_to to a test_request event id addressed to you to answer it."
+            "Run ONE approved deterministic science tool and publish the result as evidence. "
+            f"Tools: {tools_txt}. Layers: {mods_txt}. modality is required except for "
+            "thermal_psr_consistency / terrain_slope_summary (fixed layers). Optional "
+            "window=[row0,row1,col0,col1]. Identical calls are cached free. "
+            "in_response_to=<test_request id> answers a request addressed to you."
         ),
     )
     @_json

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -52,6 +53,8 @@ ACTIONABLE = (
     EventKind.REVISION,
 )
 MAX_TEXT = 1500
+INITIAL_TOKENS_PER_CHAR = 0.5  # conservative until the first call calibrates the estimator
+OUTPUT_ALLOWANCE_TOKENS = 1500  # per-call output allowance for the (soft) total-token cap
 MAX_LIST = 6
 
 # Which keyword parameters each tool accepts (everything else is rejected) and their bounds.
@@ -95,6 +98,11 @@ class RunLimits:
     max_rounds_per_agent: int = 4
     max_function_calls_per_turn: int = 10  # forwarded to MAF's function-invocation loop
     max_roundtrips_per_turn: int = 6
+    # P6 token hardening (None = unlimited). Counted from ACTUAL provider-reported usage.
+    max_input_tokens: int | None = None
+    max_total_tokens: int | None = None
+    digest_max_chars: int = 5000  # bounded evidence digest per turn
+    max_prompt_chars: int = 9000  # hard cap on the per-turn user message
 
 
 class TurnRunner(Protocol):
@@ -131,6 +139,9 @@ class RunSummary:
     exit_reasons: dict[str, str | None]
     budget: dict[str, Any]
     problems: list[str]
+    tokens_by_agent: dict[str, dict[str, int]] = field(default_factory=dict)
+    cost: dict[str, Any] = field(default_factory=dict)
+    limits: dict[str, Any] = field(default_factory=dict)
 
 
 def _err(code: str, message: str, **extra: Any) -> dict[str, Any]:
@@ -153,6 +164,24 @@ def _round(v: Any) -> Any:
     if isinstance(v, list):
         return [_round(x) for x in v]
     return v
+
+
+def param_text(m: ToolMeasurement) -> str:
+    p = {k: v for k, v in m.parameters.items() if k != "unavailable_detail" and v is not None}
+    return json.dumps(p, sort_keys=True)
+
+
+def measurement_event_text(m: ToolMeasurement) -> str:
+    """The exact free text of a measurement/test_result event (shared with the offline verifier)."""
+    if m.value is None:
+        return _clip(f"{m.tool_id}: unavailable")
+    return _clip(f"{m.tool_id}({param_text(m)}) -> {json.dumps(_round(m.value))}")
+
+
+def recompute_event_text(original_tool_run_id: str, reproduced: bool) -> str:
+    return f"independent recomputation of {original_tool_run_id}: " + (
+        "reproduced within tolerance" if reproduced else "DID NOT reproduce"
+    )
 
 
 class SwarmRuntime:
@@ -183,6 +212,11 @@ class SwarmRuntime:
         self.tool_calls = 0
         self.llm_calls = 0
         self.tokens = {"input": 0, "output": 0, "total": 0}
+        self.tokens_by_agent: dict[str, dict[str, int]] = {}
+        self._inflight: dict[int, int] = {}  # reservation id -> reserved input tokens
+        self._res_seq = 0
+        self._ratio_obs: list[float] = []  # observed provider input tokens per request character
+        self.peak_inflight = 0
         self._n = 0
         self._finished = False
         self._ended_reason = "RUNNING"
@@ -398,11 +432,7 @@ class SwarmRuntime:
             agent_id,
             kind,
             parent_event_ids=parents,
-            claim_or_request=_clip(
-                f"{tool_id}({self._param_text(m)}) -> {json.dumps(_round(m.value))}"
-                if m.value is not None
-                else f"{tool_id}: unavailable"
-            ),
+            claim_or_request=measurement_event_text(m),
             evidence_type=EvidenceType.COMPUTED_METRIC,
             source_artifact_ids=list(m.source_file_ids),
             tool_id=m.tool_id,
@@ -466,8 +496,7 @@ class SwarmRuntime:
             agent_id,
             EventKind.MEASUREMENT,
             parent_event_ids=[orig_event],
-            claim_or_request=f"independent recomputation of {tool_run_id}: "
-            + ("reproduced within tolerance" if same else "DID NOT reproduce"),
+            claim_or_request=recompute_event_text(tool_run_id, same),
             evidence_type=EvidenceType.COMPUTED_METRIC,
             source_artifact_ids=list(original.source_file_ids),
             tool_id=original.tool_id,
@@ -739,6 +768,28 @@ class SwarmRuntime:
                 extra.append(f"unit: {got[0].unit}")
         return head + ": " + body + ((" | " + " | ".join(extra)) if extra else "")
 
+    def compact_event(self, e: EvidenceEvent, text_chars: int = 240) -> str:
+        """One bounded line. The event id, ALL parent ids (to 12, then a count), status and the
+        short source-file ids are never truncated; only the free text is clipped."""
+        parents = list(e.parent_event_ids)
+        shown = ", ".join(parents[:12]) + (
+            f" +{len(parents) - 12} more" if len(parents) > 12 else ""
+        )
+        head = f"[{e.event_id}] {e.agent_id} {e.event_kind.value}"
+        if parents:
+            head += f" (parents: {shown})"
+        if e.hypothesis_status:
+            head += f" status={e.hypothesis_status.value}"
+        srcs = sorted(
+            {a.rsplit("/", 1)[-1].removeprefix("sombench:") for a in e.source_artifact_ids}
+        )
+        if srcs:
+            head += " src: " + ",".join(srcs[:3]) + (f" +{len(srcs) - 3}" if len(srcs) > 3 else "")
+        body = e.claim_or_request or ""
+        if len(body) > text_chars:
+            body = body[: text_chars - 1] + f"... [full: get_event {e.event_id}]"
+        return head + ": " + body
+
     def list_events(
         self, agent_id: str, kinds: list[str] | None = None, since_event_id: str | None = None
     ) -> list[str]:
@@ -747,8 +798,8 @@ class SwarmRuntime:
         for _, e in self.store.events(since or 0):
             if kinds and e.event_kind.value not in kinds:
                 continue
-            out.append(self.describe_event(e))
-        return out[-40:]
+            out.append(self.compact_event(e))
+        return out[-15:]  # bounded; get_event returns one event in full
 
     def get_event_detail(self, event_id: str) -> dict[str, Any]:
         e = self.store.get_event(event_id)
@@ -766,12 +817,55 @@ class SwarmRuntime:
         return out
 
     # ------------------------------------------------------------ LLM accounting
-    def llm_before_call(self, agent_id: str) -> None:
+    # Token ceilings are enforced with PRE-CALL RESERVATIONS. A call is admitted only if
+    #   tokens already used (provider-reported) + tokens reserved by calls still in flight
+    #   + this call's own estimated input
+    # fits under the cap. Concurrent specialists therefore cannot all pass a check made against
+    # completed usage alone, and a call can no longer push the total past the cap by its own size
+    # (both failure modes were observed in the P6 live runs). The input estimate is calibrated
+    # from the run's own provider-reported usage (largest observed tokens-per-character x 1.25;
+    # a conservative 0.5 before any call completes). It is an ESTIMATE: the actual overshoot, if
+    # the estimate was too low, is measured and recorded in the run summary. Output length is not
+    # capped by the provider call, so ``max_total_tokens`` only reserves a fixed allowance per
+    # call for output and is therefore a soft limit.
+    def estimate_input_tokens(self, measure_chars: int) -> int:
+        ratio = max(self._ratio_obs) * 1.25 if self._ratio_obs else INITIAL_TOKENS_PER_CHAR
+        return int(math.ceil(measure_chars * ratio))
+
+    @property
+    def reserved_input_tokens(self) -> int:
+        return sum(self._inflight.values())
+
+    def llm_before_call(self, agent_id: str, measure_chars: int = 0) -> int:
+        """Admit a model call (or raise ``BudgetExhausted``) and return its reservation id.
+
+        ``measure_chars`` is the size of the request (messages + instructions + tool schemas);
+        0 means "unknown" and reserves nothing (legacy behaviour, used only by direct tests).
+        """
         if self._finished:
             raise BudgetExhausted("RUN_ENDED")
         if self.llm_calls >= self.limits.budget.max_llm_calls:
             raise BudgetExhausted("LLM_CALLS")
+        lim = self.limits
+        est = self.estimate_input_tokens(measure_chars) if measure_chars else 0
+        reserved = self.reserved_input_tokens
+        if lim.max_input_tokens is not None:
+            if self.tokens["input"] + reserved + est > lim.max_input_tokens:
+                raise BudgetExhausted("INPUT_TOKENS")
+        if lim.max_total_tokens is not None:
+            allowance = OUTPUT_ALLOWANCE_TOKENS * (len(self._inflight) + 1)
+            if self.tokens["total"] + reserved + est + allowance > lim.max_total_tokens:
+                raise BudgetExhausted("TOTAL_TOKENS")
         self.llm_calls += 1
+        self._res_seq += 1
+        self._inflight[self._res_seq] = est
+        self.peak_inflight = max(self.peak_inflight, len(self._inflight))
+        return self._res_seq
+
+    def llm_release(self, reservation: int | None) -> None:
+        """Release a reservation (idempotent); called on completion, error and cancellation."""
+        if reservation is not None:
+            self._inflight.pop(reservation, None)
 
     def llm_record(
         self,
@@ -782,13 +876,24 @@ class SwarmRuntime:
         response: Any,
         error: str | None,
         usage: dict[str, int | None],
+        reservation: int | None = None,
+        measure_chars: int | None = None,
     ) -> None:
+        self.llm_release(reservation)
+        used = int(usage.get("input_token_count") or 0)
+        if measure_chars and used > 0:  # calibrate the estimator from ACTUAL provider usage
+            self._ratio_obs.append(used / measure_chars)
         for k, name in (
             ("input", "input_token_count"),
             ("output", "output_token_count"),
             ("total", "total_token_count"),
         ):
             self.tokens[k] += int(usage.get(name) or 0)
+            per = self.tokens_by_agent.setdefault(
+                agent_id, {"calls": 0, "input": 0, "output": 0, "total": 0}
+            )
+            per[k] += int(usage.get(name) or 0)
+        self.tokens_by_agent[agent_id]["calls"] += 1
         self.store.append_llm_call(
             investigation_id=self.investigation_id,
             agent_id=agent_id,
@@ -940,6 +1045,26 @@ class SwarmRuntime:
             exit_reasons={a: s.exit_reason for a, s in self.state.items()},
             budget={**b.model_dump(), "max_rounds_per_agent": self.limits.max_rounds_per_agent},
             problems=self.store.verify(),
+            tokens_by_agent={a: dict(v) for a, v in sorted(self.tokens_by_agent.items())},
+            cost={
+                "status": "unpriced",
+                "note": "no independently verified model rate is configured; tokens come from "
+                "actual provider responses",
+            },
+            limits={
+                "max_input_tokens": self.limits.max_input_tokens,
+                "max_total_tokens": self.limits.max_total_tokens,
+                "digest_max_chars": self.limits.digest_max_chars,
+                "max_prompt_chars": self.limits.max_prompt_chars,
+                "enforcement": "pre-call reservation (estimated input + in-flight); input cap is "
+                "estimate-based, total cap is soft because output length is not capped",
+                "peak_inflight_calls": self.peak_inflight,
+                "input_cap_overshoot_tokens": (
+                    None
+                    if self.limits.max_input_tokens is None
+                    else max(0, self.tokens["input"] - self.limits.max_input_tokens)
+                ),
+            },
         )
 
     def write_outputs(self, directory: Path, summary: RunSummary) -> None:

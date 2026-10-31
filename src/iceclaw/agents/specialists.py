@@ -13,6 +13,7 @@ from typing import Any
 
 from agent_framework import Agent
 
+from iceclaw.agents.digest import build_digest, build_own_summary
 from iceclaw.agents.tools import make_tools
 from iceclaw.contracts import EvidenceEvent
 from iceclaw.swarm.runtime import AgentSpec, AgentState, SwarmRuntime, TurnRunner
@@ -34,34 +35,30 @@ GENERIC = (
 
 COMMON = """\
 You are one of four independent AI specialists auditing a lunar ice-PROSPECTIVITY prediction for ONE
-verified region. You act only through your tools. No supervisor tells you what to find or in what
-order: the other specialists run concurrently and may publish evidence that you can build on,
-check, request tests of, or challenge.
+verified region, acting only through tools. No supervisor dictates findings or order; the others run
+concurrently and publish evidence you can build on, check, request tests of, or challenge.
 
-Scientific ground rules
-- The NASA-IBM output is a prospectivity INDEX from a regression model (raw values can fall outside
-  [0,1]). It is not a measured ice abundance, not a calibrated probability, and not a detection.
-  Never state or imply that ice was found or confirmed.
-- Numbers come ONLY from tool results. Every quantitative statement must cite the event ids of the
-  measurements it rests on. Never invent, estimate, or recompute numbers yourself.
-- Layers and units: nasa_ibm_prediction_raw [prospectivity_index], pixelwise_temperature [K],
-  pixelwise_shadow_mask [fraction; permanently shadowed where >= 0.5], pixelwise_terrain [deg].
-  No other layers exist. Tile-level scalars and single-point anchors are not arrays.
-- Thresholds you pass to tools (cold-trap K, steep-slope degrees, ...) are YOUR parameters, not
-  validated physical constants: state them and their limits when you rely on them.
-- Keep apart: measurement (tool result), claim (your interpretation), hypothesis (untested idea).
-  State alternative explanations and limitations honestly.
-- Disagreement is NOT required. If the evidence is consistent, say so. Never manufacture a
-  challenge, a conflict, or a revision; a revision needs NEW evidence published after the claim.
-- Budgets are small and shared (shown each turn). Plan a few high-value calls; identical repeated
-  calls return the cached event and cost nothing.
+Rules
+- The NASA-IBM output is a prospectivity INDEX from a regression model (raw values can leave [0,1]):
+  not ice abundance, not a calibrated probability, not a detection. Never imply ice was found.
+- Numbers come ONLY from tool results; every quantitative statement cites the measurement event ids
+  it rests on. Never invent, estimate or recompute numbers.
+- Layers [unit]: nasa_ibm_prediction_raw [prospectivity_index], pixelwise_temperature [K],
+  pixelwise_shadow_mask [fraction; shadowed where >= 0.5], pixelwise_terrain [deg]. Nothing else.
+- Thresholds you pass to tools are YOUR screening parameters, not physical constants: state them.
+- Keep apart: measurement (tool), claim (your interpretation), hypothesis (untested). Give
+  alternative explanations and limitations.
+- Disagreement is NOT required. If evidence is consistent say so; never manufacture a challenge or
+  revision. A revision needs NEW evidence published after the claim.
+- Budgets are small and shared; make a few high-value calls. Identical repeat calls are cached free.
+- Issue several INDEPENDENT tool calls together in one step (parallel) to save model calls.
+- Published events reach you as a bounded digest (ids and parent ids always kept, text clipped);
+  use get_event for the full text of any event.
 
-How to work
-- Decide for yourself what to measure within your remit. Publish a claim that cites the measurement
-  event ids, then conclude. When you are woken by others' events, read them and decide
-  independently whether anything is warranted: another test, request_test to the right
-  specialist, a challenge, a revision of your own claim backed by new evidence, or nothing.
-- End each turn with one or two plain sentences saying what you did (no new numbers).
+Work: choose what to measure in your remit, publish a claim citing the measurement ids, conclude.
+When woken by others' events, decide independently whether anything is warranted (a test,
+request_test, a challenge, a revision backed by new evidence) or nothing. End each turn with one or
+two plain sentences, no new numbers.
 """
 
 ROLES: dict[str, tuple[str, str]] = {
@@ -142,19 +139,22 @@ def build_specs() -> list[AgentSpec]:
 def _budget_line(rt: SwarmRuntime) -> str:
     b = rt.limits.budget
     return (
-        f"Budget remaining (shared): tool calls "
-        f"{max(0, b.max_tool_calls - rt.tool_calls)}/{b.max_tool_calls}, "
-        f"model calls {max(0, b.max_llm_calls - rt.llm_calls)}/{b.max_llm_calls}, "
-        f"events {max(0, b.max_events - rt.store.count_events())}/{b.max_events}, "
-        f"max reaction depth {b.max_hops}. "
-        f"Your rounds: {{rounds}}/{rt.limits.max_rounds_per_agent}."
+        f"Budget left (shared): tool calls {max(0, b.max_tool_calls - rt.tool_calls)}/"
+        f"{b.max_tool_calls}, model calls {max(0, b.max_llm_calls - rt.llm_calls)}/"
+        f"{b.max_llm_calls}, events {max(0, b.max_events - rt.store.count_events())}/"
+        f"{b.max_events}, reaction depth <= {b.max_hops}. "
+        f"Your round {{rounds}}/{rt.limits.max_rounds_per_agent}."
     )
 
 
 def build_prompt(
     rt: SwarmRuntime, spec: AgentSpec, st: AgentState, new: list[EvidenceEvent]
 ) -> str:
-    """Per-turn user message: context, budget, own history, newly delivered events."""
+    """Per-turn user message with a BOUNDED, deterministic digest (see agents/digest.py).
+
+    The full event history stays in SQLite and is reachable through ``list_events`` /
+    ``get_event``; this prompt never grows with the length of the run beyond the configured caps.
+    """
     parts = [_budget_line(rt).format(rounds=st.rounds + 1)]
     if st.rounds == 0:
         parts.append("Region context (JSON): " + rt.context.model_dump_json())
@@ -164,26 +164,28 @@ def build_prompt(
             + "; layers: "
             + ", ".join(sorted(spec.allowed_modalities))
         )
-    if st.own_event_ids:
-        own = [rt.describe_event(e) for i in st.own_event_ids[-8:] if (e := rt.store.get_event(i))]
-        parts.append("Your recent events:\n" + "\n".join(own))
-    if new:
-        lines = [rt.describe_event(e) for e in new[-25:]]
-        parts.append("Events published by others since your last turn:\n" + "\n".join(lines))
+    own = build_own_summary(rt, st.own_event_ids)
+    if own:
+        parts.append("Your recent events:\n" + own)
+    digest = build_digest(rt, spec.agent_id, new, rt.limits.digest_max_chars)
+    if digest:
+        parts.append("Events published by others since your last turn:\n" + digest)
     if st.rounds == 0 and not new:
         parts.append(
             "This is the start of the investigation. Decide what within your remit is worth "
-            "measuring "
-            "with your limited budget, measure it, publish a claim citing your evidence, "
-            "then conclude."
+            "measuring with your limited budget, measure it, publish a claim citing your "
+            "evidence, then conclude."
         )
     else:
         parts.append(
-            "Decide whether anything is warranted now (a test, a request, a challenge, a "
-            "revision backed by "
-            "NEW evidence, or a conclusion). It is fine to do nothing."
+            "Decide whether anything is warranted now (a test, a request, a challenge, a revision "
+            "backed by NEW evidence, or a conclusion). It is fine to do nothing."
         )
-    return "\n\n".join(parts)
+    prompt = "\n\n".join(parts)
+    cap = rt.limits.max_prompt_chars
+    if len(prompt) > cap:  # hard cap: clip the tail, never the ids kept above it
+        prompt = prompt[: cap - 60] + "\n[prompt clipped to the configured cap; use list_events]"
+    return prompt
 
 
 # ---------------------------------------------------------------------------- MAF agents

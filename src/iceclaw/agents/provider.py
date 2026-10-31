@@ -8,6 +8,8 @@ never placed in messages, logs or stored records.
 
 from __future__ import annotations
 
+import asyncio
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -26,6 +28,24 @@ from agent_framework.openai import OpenAIChatClient
 from iceclaw.config import Settings
 from iceclaw.swarm.runtime import RunLimits, SwarmRuntime
 
+# 2 430 base64url-style characters (contains 'sk-' mid-token on purpose); TEST FIXTURE ONLY
+OPAQUE_FIXTURE = "Qr7_x-9Yk" * 270
+
+
+def measure_request_chars(request: list[Any], options: Any) -> int:
+    """Characters of everything the provider will tokenize: messages, instructions, tool schemas."""
+    total = len(json.dumps(request, default=str))
+    for key, value in dict(options or {}).items():
+        if value is None:
+            continue
+        if key == "tools":
+            for t in value:
+                d = t.to_dict() if hasattr(t, "to_dict") else t
+                total += len(json.dumps(d, default=str))
+        else:
+            total += len(json.dumps(value, default=str))
+    return total
+
 
 class _Instrumented:
     """Mixin placed FIRST in the MRO: meters each real model call below MAF's tool loop."""
@@ -43,9 +63,11 @@ class _Instrumented:
         runtime, agent_id = self._runtime, self._agent_id
 
         async def call() -> ChatResponse:
-            runtime.llm_before_call(agent_id)  # may raise BudgetExhausted before any spend
-            started = datetime.now(UTC)
             request = [m.to_dict() for m in messages]
+            measure = measure_request_chars(request, options)
+            # may raise BudgetExhausted BEFORE any spend; otherwise reserves this call's estimate
+            rid = runtime.llm_before_call(agent_id, measure)
+            started = datetime.now(UTC)
             try:
                 resp = await nxt(messages=messages, stream=False, options=options, **kwargs)
             except Exception as e:
@@ -56,7 +78,12 @@ class _Instrumented:
                     response=None,
                     error=f"{type(e).__name__}: {e}"[:600],
                     usage={},
+                    reservation=rid,
+                    measure_chars=measure,
                 )
+                raise
+            except BaseException:  # cancellation / timeout: never leak a reservation
+                runtime.llm_release(rid)
                 raise
             runtime.llm_record(
                 agent_id,
@@ -65,6 +92,8 @@ class _Instrumented:
                 response=resp.to_dict(),
                 error=None,
                 usage=dict(resp.usage_details or {}),
+                reservation=rid,
+                measure_chars=measure,
             )
             return resp
 
@@ -121,9 +150,14 @@ class _ScriptedBase(BaseChatClient):
     _n: int
     prompts: list[str]  # every prompt this fake saw (for secrecy tests)
     tool_results: list[str]  # every tool result MAF fed back to this fake
+    latency_s: float = 0.0  # simulated provider latency (tests of in-flight concurrency)
+    # when True, add an opaque protected_data reasoning item, like the real provider
+    emit_reasoning: bool = False
 
     def _inner_get_response(self, *, messages, stream, options, **kwargs):
         async def call() -> ChatResponse:
+            if self.latency_s > 0:
+                await asyncio.sleep(self.latency_s)
             msgs = list(messages)
             users = [m.text or "" for m in msgs if m.role == "user"]
             results = [
@@ -151,7 +185,14 @@ class _ScriptedBase(BaseChatClient):
                     )
                     for i, (name, args) in enumerate(reply)
                 ]
-            chars_in = sum(len(m.text or "") for m in msgs)
+            if self.emit_reasoning:
+                rid = f"rs_{self._script_agent}_{self._n}"
+                reasoning = Content.from_text_reasoning(
+                    id=rid, text="", protected_data=OPAQUE_FIXTURE
+                )
+                contents.insert(0, reasoning)
+            # like a real provider, count everything tokenized: messages + instructions + tools
+            chars_in = measure_request_chars([m.to_dict() for m in msgs], options)
             return ChatResponse(
                 messages=[Message(role="assistant", contents=contents)],
                 response_id=f"scripted-{self._script_agent}-{self._n}",

@@ -1,4 +1,4 @@
-"""IceClaw CLI shell (P0): all commands fail with NOT_IMPLEMENTED until their phase."""
+"""IceClaw CLI. Commands call the shared services; unimplemented ones fail NOT_IMPLEMENTED."""
 
 from __future__ import annotations
 
@@ -10,11 +10,7 @@ from iceclaw.config import load_dotenv_file, load_settings
 
 NOT_IMPLEMENTED_EXIT = 2
 
-_PHASES = {
-    "investigate": "P5",
-    "verify": "P5",
-    "benchmark": "P7",
-}
+_PHASES = {"benchmark": "P7"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,10 +27,45 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="list tiles that have verified observations but NO prediction (not investigable)",
     )
-    inv = sub.add_parser("investigate", help="Run an investigation (P5)")
+    inv = sub.add_parser(
+        "investigate",
+        help="Run the four specialists (live model calls) and export a verified bundle",
+    )
     inv.add_argument("--region", required=True, metavar="REGION_ID")
-    ver = sub.add_parser("verify", help="Verify a saved run bundle (P5)")
-    ver.add_argument("--run", required=True, metavar="RUN_ID")
+    inv.add_argument("--max-events", type=int, default=40)
+    inv.add_argument("--max-hops", type=int, default=5)
+    inv.add_argument("--max-tool-calls", type=int, default=16)
+    inv.add_argument("--max-llm-calls", type=int, default=28)
+    inv.add_argument("--timeout-s", type=float, default=420.0)
+    inv.add_argument("--max-rounds", type=int, default=3)
+    inv.add_argument("--max-input-tokens", type=int, default=150000)
+    inv.add_argument(
+        "--replay", metavar="RUN_ID", help="replay a saved run instead (no model calls)"
+    )
+    ver = sub.add_parser("verify", help="Verify a bundle offline (no API key, no GPU)")
+    ver.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    ver.add_argument(
+        "--source-package", metavar="PATH", help="external content-addressed source package"
+    )
+    ver.add_argument(
+        "--local-source", action="store_true", help="rebuild the package from local data"
+    )
+    ver.add_argument("--json", action="store_true")
+    ver.add_argument(
+        "--write",
+        action="store_true",
+        help="refresh the bundle's verification.json with this result (not an integrity file)",
+    )
+    exp = sub.add_parser("export", help="Export a RECORDED run into a bundle (no model call)")
+    exp.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    exp.add_argument("--out", metavar="NEW_RUN_ID")
+    pub = sub.add_parser(
+        "publish", help="Create a public-redacted bundle (no opaque provider data); no model call"
+    )
+    pub.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    pub.add_argument("--out", metavar="NEW_BUNDLE_ID")
+    rep = sub.add_parser("replay", help="Replay a saved run from its events (no model call)")
+    rep.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
     ben = sub.add_parser("benchmark", help="Run a benchmark config (P7)")
     ben.add_argument("--config", required=True, metavar="PATH")
     return p
@@ -46,14 +77,145 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 1
-    load_dotenv_file()  # values are never printed
+    if args.command in ("list-regions", "investigate"):
+        load_dotenv_file()  # IceClaw's own loader; values are never printed
     if args.command == "list-regions":
         return _list_regions(as_json=args.json, obs_only=args.observation_only)
+    if args.command == "investigate":
+        return _investigate(args)
+    if args.command == "verify":
+        return _verify(args)
+    if args.command == "export":
+        return _export(args)
+    if args.command == "publish":
+        return _publish(args)
+    if args.command == "replay":
+        return _replay(args.run)
     print(
         f"NOT_IMPLEMENTED: '{args.command}' is scheduled for phase {_PHASES[args.command]}.",
         file=sys.stderr,
     )
     return NOT_IMPLEMENTED_EXIT
+
+
+def _service():
+    from iceclaw.services import InvestigationService
+
+    return InvestigationService(load_settings())
+
+
+def _investigate(args) -> int:
+    from iceclaw.config import ConfigError
+    from iceclaw.contracts import RunBudget
+
+    if args.replay:
+        return _replay(args.replay)
+    svc = _service()
+    budget = RunBudget(
+        max_events=args.max_events, max_hops=args.max_hops, max_tool_calls=args.max_tool_calls,
+        max_llm_calls=args.max_llm_calls, timeout_s=args.timeout_s,
+    )  # fmt: skip
+    s = svc.settings
+    print(f"settings: {s.redacted()}")
+    print(f"budget: {budget.model_dump()}; max input tokens {args.max_input_tokens}")
+    try:
+        res = svc.investigate(
+            args.region, budget=budget, max_rounds_per_agent=args.max_rounds,
+            max_input_tokens=args.max_input_tokens,
+        )  # fmt: skip
+    except ConfigError as e:
+        print(f"LIVE MODE UNAVAILABLE: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:  # unknown / observation-only / prediction-only region etc.
+        print(f"{getattr(e, 'code', type(e).__name__)}: {e}", file=sys.stderr)
+        return 1
+    sm = res.summary
+    tokens = f"{sm['input_tokens']} in / {sm['output_tokens']} out / {sm['total_tokens']} total"
+    print(
+        f"run {res.run_id}: {sm['ended_reason']} in {sm['elapsed_s']}s; events {sm['events']}, "
+        f"tool calls {sm['tool_calls']}, model calls {sm['llm_calls']}, tokens {tokens}; "
+        f"cost {sm['cost']['status']}"
+    )
+    print(res.verification.render())
+    print(f"bundle: {res.run_dir}")
+    return 0 if res.ok else 3
+
+
+def _verify(args) -> int:
+    try:
+        rep = _service().verify(
+            args.run, source_package=args.source_package, local_source=args.local_source
+        )
+    except FileNotFoundError as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    if args.json:
+        import json
+
+        print(json.dumps(rep.to_dict(), indent=2))
+    else:
+        print(rep.render())
+    if args.write:
+        import json
+
+        target = _service().resolve_run(args.run) / "verification.json"
+        target.write_text(json.dumps(rep.to_dict(), indent=1), encoding="utf-8", newline="\n")
+        print(f"wrote {target}")
+    return 0 if rep.ok else 1
+
+
+def _export(args) -> int:
+    try:
+        res = _service().export_recorded(args.run, out_id=args.out)
+    except FileNotFoundError as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"{getattr(e, 'code', type(e).__name__)}: {e}", file=sys.stderr)
+        return 1
+    print(res.verification.render())
+    print(f"bundle: {res.run_dir}")
+    return 0 if res.ok else 3
+
+
+def _publish(args) -> int:
+    import json
+
+    try:
+        res = _service().publish(args.run, out_id=args.out)
+    except FileNotFoundError as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"{getattr(e, 'code', type(e).__name__)}: {e}", file=sys.stderr)
+        return 1
+    m = json.loads((res.run_dir / "input_manifest.json").read_text(encoding="utf-8"))
+    red = m["transcript_redactions"]
+    before, after = (
+        red["private_transcript_bytes"],
+        (res.run_dir / "llm_calls.jsonl").stat().st_size,
+    )
+    print(
+        f"published {res.run_dir.name} from {red['source_bundle_dir']}: profile "
+        f"{m['transcript_profile']}; {red['fields_redacted']} opaque field(s) "
+        f"({red['characters_removed']} chars) redacted; transcript {before} -> {after} bytes"
+    )
+    print(res.verification.render())
+    print(f"bundle: {res.run_dir}")
+    return 0 if res.ok else 3
+
+
+def _replay(run: str) -> int:
+    try:
+        r = _service().replay(run)
+    except (FileNotFoundError, ValueError) as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    print(r.header)
+    for line in r.lines:
+        print(line)
+    print(f"-- end of recorded run ({r.n_events} events, {r.model_calls_made} model calls made) --")
+    return 0
 
 
 def _list_regions(as_json: bool, obs_only: bool = False) -> int:

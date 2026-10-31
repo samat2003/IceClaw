@@ -81,6 +81,15 @@ class EvidenceStore:
                 )
         self._db.commit()
 
+    @classmethod
+    def open_readonly(cls, path: str | Path) -> EvidenceStore:
+        """Open an existing history read-only (the file is never modified)."""
+        self = cls.__new__(cls)
+        self.path = str(path)
+        self._db = sqlite3.connect(f"file:{path}?mode=ro", uri=True, check_same_thread=False)
+        self._db.row_factory = sqlite3.Row
+        return self
+
     def close(self) -> None:
         self._db.close()
 

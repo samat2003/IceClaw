@@ -124,12 +124,15 @@ def make_runtime(
     )
 
 
-async def run_with(rt: SwarmRuntime, policies: dict[str, Policy], **fic: Any):
+async def run_with(
+    rt: SwarmRuntime, policies: dict[str, Policy], latency_s: float = 0.0, **fic: Any
+):
     """Run the collective with scripted models. Returns (summary, clients)."""
     clients: dict[str, ScriptedChatClient] = {}
 
     def factory(runtime: SwarmRuntime, aid: str):
         c = ScriptedChatClient(policies[aid], aid, **fic)
+        c.latency_s = latency_s
         c.bind(runtime, aid)
         clients[aid] = c
         return c

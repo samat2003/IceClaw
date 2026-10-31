@@ -155,3 +155,17 @@ store (not retained).
 * Wake rules are deliberately conservative (claims wake only the Skeptic); specialists see other
   specialists' claims at their next turn and react when challenged, asked or answered.
 * Single paired region: `PARTIAL_ONE_REGION`.
+
+## 9. P6 addendum
+
+Bounded evidence digest, token ceilings, per-agent token accounting, exported bundles, offline
+verification and replay are documented in [INVESTIGATION_BUNDLE.md](INVESTIGATION_BUNDLE.md). The
+§7 live run above is preserved unchanged and exports to a verifiable bundle. Wake rules, roles and
+permissions are as described here; the prompt builder now shows a bounded digest instead of the full
+new-event list, and the shared instruction block is shorter.
+
+P6 corrections: the input-token cap is now enforced with **pre-call reservations** (completed +
+in-flight + this call's calibrated estimate), the total-token cap is explicitly **soft**, public
+distribution uses the `public-redacted` bundle profile (`publish`, `iceclaw-bundle/2`), and rankings
+are labelled as investigation attention with alphabetical ties (not validated ice prospectivity).
+Details and the measured overshoot analysis: INVESTIGATION_BUNDLE.md §7 and §10.

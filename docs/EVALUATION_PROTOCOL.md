@@ -84,3 +84,35 @@ python -m pytest -q
 
 The script builds (or reuses) the suite, verifies integrity, runs the baseline, freezes its
 output, scores it, and writes the report (which contains sealed labels) under the evaluator root.
+
+## 6. P4 addition: multimodal suite `p4-multimodal-v1` (separate, versioned)
+
+The P3 suite above is unchanged and remains the controlled within-tile design. P4 adds a second,
+independently frozen suite built from the 12 genuine SomBench south test tiles
+(`src/iceclaw/evaluation/multimodal.py`, `scripts/p4_build_multimodal.py`).
+
+* **Cases:** 12, one distinct tile each (12 independent source tiles); 4 clean controls
+  (`clean_identical` ×2 on different tiles, float32 round-trip, 1e-6 noise) and 8 synthetic faults
+  on the layers with established units: temperature in °C instead of K, +3 K bias, slope in
+  radians, PSR mask inverted, temperature layer rolled against the others, NaN block with the
+  coverage mask not updated, empty slope layer, temperature/slope arrays swapped.
+* **Visible to agents:** per case `pixelwise_temperature` (K), `pixelwise_shadow_mask`
+  (fraction), `pixelwise_terrain` (deg) + coverage masks + opaque case id; `source_mode =
+  observation_only`; no prediction layer. Natural nodata (NaN, uncovered) is genuine data, not a
+  fault. Tile ids, fault labels, seed and salt are sealed; the expert target `PRO` is not part of
+  this suite and is stored (for later evaluator use) only under `data/evaluation_inputs/`.
+* **Confounding:** each fault sits on a different tile, so fault type and tile effects are
+  confounded; 12 cases give no meaningful confidence intervals.
+* **Baseline** (`ObsBaselineConfig`, hashed): missing_data, layer_empty, temperature_range
+  (20–450 K), slope_range (max within 1–90°), shadow_range, psr_temperature_sign (PSR must be ≥ 20 K
+  colder than non-PSR; the P2 `thermal_psr_consistency` tool).
+* **Preliminary frozen results** (seed 5 in the unit test; the same pattern for the script's
+  default seed): TP 7, FP 1, FN 1, TN 3 → precision 0.875, recall 0.875, F1 0.875, clean FPR 0.25.
+  Two imperfections are recorded, not tuned away: (1) `clean_quantization_noise` is a false
+  positive because the shadow tolerance (1e-6) equals the control's own noise level, a
+  mis-specified tolerance; (2) `temperature_spatial_roll` was pre-registered as undetectable but
+  was flagged (by `psr_temperature_sign`). The baseline config must change only through a **new
+  versioned config/suite before any agent run**, never retroactively.
+* **Runner requirement (P7):** present each case in an isolated run, as for P3.
+
+Reproduce: `python scripts/p4_build_multimodal.py --scenarios-root data/scenarios --eval-root data/evaluation`.

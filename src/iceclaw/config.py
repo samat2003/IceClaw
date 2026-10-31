@@ -10,6 +10,7 @@ from pathlib import Path
 DEFAULT_DATA_ROOT = "./data/processed"
 DEFAULT_RUNS_ROOT = "./runs"
 DEFAULT_MOONATLAS_ROOT = ".upstream/moonatlas-science/examples/science-smoke"
+DEFAULT_SOMBENCH_ROOT = "data/sombench/prospectivity_dataset"
 DEFAULT_PROVIDER = "openai"
 SUPPORTED_PROVIDERS = ("openai",)
 
@@ -33,6 +34,8 @@ class Settings:
     openai_api_key: str | None = field(default=None, repr=False)
     # Directories that are (or contain) MOONATLAS exports; see data/catalog.py discovery rules.
     moonatlas_roots: tuple[Path, ...] = ()
+    # Original SomBench GeoTIFF directory; None disables observation pairing.
+    sombench_root: Path | None = None
 
     @property
     def has_api_key(self) -> bool:
@@ -91,6 +94,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     raw_roots = e.get("ICECLAW_MOONATLAS_ROOTS") or DEFAULT_MOONATLAS_ROOT
     return Settings(
         moonatlas_roots=tuple(Path(p) for p in raw_roots.split(os.pathsep) if p),
+        sombench_root=Path(e.get("ICECLAW_SOMBENCH_ROOT") or DEFAULT_SOMBENCH_ROOT),
         data_root=Path(e.get("ICECLAW_DATA_ROOT") or DEFAULT_DATA_ROOT),
         runs_root=Path(e.get("ICECLAW_RUNS_ROOT") or DEFAULT_RUNS_ROOT),
         llm_provider=(e.get("ICECLAW_LLM_PROVIDER") or DEFAULT_PROVIDER).strip().lower(),

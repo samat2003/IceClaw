@@ -36,6 +36,8 @@ class Readiness(StrEnum):
 class SourceMode(StrEnum):
     UPSTREAM_PUBLISHED_EXAMPLE = "upstream_published_example"
     LOCAL_CHECKPOINT_RUN = "local_checkpoint_run"
+    # P4 (additive): scenario holds physical observations only, no model prediction at all.
+    OBSERVATION_ONLY = "observation_only"
 
 
 class EventKind(StrEnum):

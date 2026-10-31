@@ -1,6 +1,6 @@
 """Application-facing service functions shared by the CLI and (later) the UI.
 
-P2 provides catalog listing only. Investigation/verification services arrive in P5.
+P2/P4 provide catalog listing only. Investigation/verification services arrive in P6.
 """
 
 from __future__ import annotations
@@ -25,6 +25,10 @@ def describe_regions(catalog: RegionCatalog) -> list[dict[str, Any]]:
         rows.append(
             {
                 "region_id": e.region_id,
+                "status": rec.status,
+                "prediction_ready": rec.prediction_ready,
+                "observation_ready": rec.observation_ready,
+                "pairing_error": rec.pairing_error,
                 "pole": e.pole,
                 "readiness": e.readiness.value,
                 "readiness_reason": e.readiness_reason,
@@ -40,6 +44,7 @@ def describe_regions(catalog: RegionCatalog) -> list[dict[str, Any]]:
                 "grid": [e.width, e.height],
                 "spatial_resolution_m": e.spatial_resolution_m,
                 "pixelwise_modalities": sorted(e.modalities),
+                "modality_units": {k: v.unit for k, v in sorted(e.modalities.items())},
                 "other_metadata": [
                     {"name": m.name, "kind": m.status, "value": m.value, "unit": m.unit}
                     for m in rec.availability
@@ -48,6 +53,32 @@ def describe_regions(catalog: RegionCatalog) -> list[dict[str, Any]]:
                 "unavailable_modalities": [
                     m.name for m in rec.availability if m.status == "unavailable"
                 ],
+                "unit_unknown_layers_not_exposed": rec.unit_unknown_layers,
+            }
+        )
+    return rows
+
+
+def describe_observation_only(catalog: RegionCatalog) -> list[dict[str, Any]]:
+    """Tiles with verified observations but NO prediction. Not selectable for investigation."""
+    rows = []
+    for sid in sorted(catalog.observation_only):
+        o = catalog.observation_only[sid]
+        rows.append(
+            {
+                "region_id": sid,
+                "status": o.status,
+                "prediction_ready": o.prediction_ready,
+                "observation_ready": o.observation_ready,
+                "reason": o.reason,
+                "original_tile_id": o.patch.patch_id,
+                "source_split": o.patch.split,
+                "grid": [o.patch.grid["widthPx"], o.patch.grid["heightPx"]],
+                "layer_finite_fraction": {
+                    k: round(v.finite_fraction, 4)
+                    for k, v in sorted(o.patch.layers.items())
+                    if v.finite_fraction < 1.0
+                },
             }
         )
     return rows

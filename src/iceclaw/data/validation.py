@@ -40,6 +40,25 @@ class ValidationResult:
         return Readiness.VERIFIED, None
 
 
+def with_verified_pairing(
+    base: ValidationResult, alignment_checks: list[Check], exposed_modalities: list[str]
+) -> ValidationResult:
+    """Return a copy of ``base`` extended with a PASSED observation pairing.
+
+    The named pixelwise modalities stop being "missing". Call only when every alignment check
+    passed; a failed pairing must leave ``base`` untouched (the prediction stays valid alone).
+    """
+    return ValidationResult(
+        checks=[
+            *base.checks,
+            *(Check(f"pairing_{c.name}", c.passed, c.detail) for c in alignment_checks),
+        ],
+        missing_pixelwise_inputs=[
+            m for m in base.missing_pixelwise_inputs if m not in exposed_modalities
+        ],
+    )
+
+
 def validate_sector(src: ma.SectorSource) -> ValidationResult:
     """Re-run checksum, decode, statistics, peak and geometry checks for one sector."""
     res = ValidationResult()

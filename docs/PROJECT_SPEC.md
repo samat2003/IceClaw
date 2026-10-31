@@ -1,6 +1,6 @@
 # IceClaw — Canonical Project Specification
 
-**Version:** 1.0 design freeze (2026-10-31)  
+**Version:** 1.1 design freeze (2026-10-31)  
 **Status:** PLAN ONLY — implementation, model inference, agent runs and benchmark results are not claimed.  
 **Repository:** https://github.com/samat2003/IceClaw  
 **Implementation roadmap:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
@@ -56,13 +56,13 @@ For full specialist analysis, obtain original held-out SomBench ice-prospectivit
 
 **Catalog inclusion rules:** accepted only after source, split, raw numeric rasters, coordinate grid, footprint, hashes and available modalities are validated. Include incomplete regions with missing-modality badges only if tools correctly disable unsupported analyses. Target at least **two distinct validated south-polar regions** for a reusable hackathon demo; if only one is available, label the feature partial rather than fabricate a second region or coordinate.
 
-**Data isolation:** Reference prospectivity arrays and injected-fault manifests are accessible only to the evaluator *after* a ranking/run is frozen. Agent tools cannot read those paths or call evaluator functions. UI may reveal reference/residual layers only in labeled post-run evaluation mode.
+**Data isolation:** Reference prospectivity arrays and injected-fault manifests are accessible only to the evaluator *after* a ranking/run is frozen. Agent tools cannot read those paths or call evaluator functions. UI may reveal reference/residual layers only in labeled post-run evaluation mode. **Implementation requirement:** the complete `RegionCatalogEntry` is private. Construct an explicitly allowlisted `AgentRegionContext` containing only the permitted observations, model prediction, source IDs and available tools. It must never serialize `reference_path`, target arrays, evaluator directory paths or seeded fault labels. Test this firewall in tool calls, prompts and exported agent events.
 
 **Raster rules:** Read numerical values exclusively from raw lossless arrays/encodings; display previews are visualization only. Preserve raw values even when regression values lie outside [0,1]. Respect lunar polar stereographic projection, native resolution, true per-tile footprints, no-data mask, units and source revisions. Do not treat nearest tile as coverage.
 
 ## 5. Canonical interfaces (all steps must implement these)
 
-These are *logical contracts*; Python dataclasses/Pydantic models must enforce them. Their field definitions must not diverge between backend, UI, tests and exported JSON.
+These are *logical contracts*; Python dataclasses/Pydantic models must enforce them. Their field definitions must not diverge between backend, UI, tests and exported JSON. The implementation also defines `AgentRegionContext` (restricted view of `RegionCatalogEntry`) and `ToolMeasurement` (provenance-rich deterministic scientific result) as detailed in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) §2; neither may expose private evaluation truth.
 
 ### RegionCatalogEntry
 

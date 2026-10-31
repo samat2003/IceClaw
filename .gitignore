@@ -1,0 +1,41 @@
+# Python environment and outputs
+.venv/
+.venv*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Secrets and machine-local settings
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+*.pem
+*.key
+
+# Scientific model/data caches, private evaluations and saved investigations
+.upstream/
+data/
+runs/
+checkpoints/
+models/
+artifacts/generated/
+artifacts/private/
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Notebooks / OS / editors
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,7 +1,7 @@
 # IceClaw — Canonical Project Specification
 
-**Version:** 1.1 design freeze (2026-10-31)  
-**Status:** PLAN ONLY — implementation, model inference, agent runs and benchmark results are not claimed.  
+**Version:** 1.2 design freeze (2026-10-31)  
+**Status:** P0–P2 foundation, published-raster adapter, catalog and deterministic science tools have been implemented and committed. The P2 local test report states 94 passing tests; tests were not rerun as part of this document edit. Original pixelwise SomBench observation ingestion, fresh model inference, agent runs, UI and benchmark results have **not** been claimed.  
 **Repository:** https://github.com/samat2003/IceClaw  
 **Implementation roadmap:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -50,11 +50,11 @@ Do not fork/rewrite the upstream science packages or copy large datasets/checkpo
 
 ## 4. Input sources, coverage and data separation
 
-**Supported first input:** the real MOONATLAS published smoke-example south-polar sector `ice-s-0001-0002`, approximately 81.45°S, 35.37°W (verify exact coordinates in the source metadata). This is a **published upstream example**, not a fresh IceClaw checkpoint inference. It supplies a normalized prediction, reference raster and source/geolocation/provenance metadata, but **may not supply all original pixelwise input modalities**. The smoke fixture alone is insufficient to demonstrate every thermal/geology tool.
+**Supported first prediction input:** the real MOONATLAS published smoke-example south-polar sector `ice-s-0001-0002`, approximately 81.45°S, 35.37°W (verify exact coordinates in the source metadata). This is a **published upstream example**, not a fresh IceClaw checkpoint inference. It supplies a normalized prediction, reference raster and source/geolocation/provenance metadata, but **may not supply all original pixelwise input modalities**. The smoke fixture alone is insufficient to demonstrate every thermal/geology tool.
 
 For full specialist analysis, obtain original held-out SomBench ice-prospectivity sample arrays and their declared metadata; process through the official pinned NASA–IBM/MOONATLAS path. The published task uses roughly 256×256 tiles with about 240 m/pixel native spatial resolution and multiple physical layers. Exact channel naming, splits, shapes, and available files are discovered from pinned official configs, **never presumed**.
 
-**Catalog inclusion rules:** accepted only after source, split, raw numeric rasters, coordinate grid, footprint, hashes and available modalities are validated. Include incomplete regions with missing-modality badges only if tools correctly disable unsupported analyses. Target at least **two distinct validated south-polar regions** for a reusable hackathon demo; if only one is available, label the feature partial rather than fabricate a second region or coordinate.
+**Catalog inclusion rules:** accepted only after source, split, raw numeric rasters, coordinate grid, footprint, hashes and available modalities are validated. Distinguish records with source observations but **no matching verified NASA–IBM prediction** from records with both; an observation-only tile is inspectable but cannot be presented as a complete prospectivity investigation. Pixelwise inputs must be geospatially registered to the exact predicted tile; do not silently reproject or alter numerical data to make them fit. Include incomplete regions with missing-modality badges only if tools correctly disable unsupported analyses. Target at least **two distinct paired, validated south-polar regions** for a reusable hackathon demo; if only one is available, label the feature partial rather than fabricate a second region or coordinate.
 
 **Data isolation:** Reference prospectivity arrays and injected-fault manifests are accessible only to the evaluator *after* a ranking/run is frozen. Agent tools cannot read those paths or call evaluator functions. UI may reveal reference/residual layers only in labeled post-run evaluation mode. **Implementation requirement:** the complete `RegionCatalogEntry` is private. Construct an explicitly allowlisted `AgentRegionContext` containing only the permitted observations, model prediction, source IDs and available tools. It must never serialize `reference_path`, target arrays, evaluator directory paths or seeded fault labels. Test this firewall in tool calls, prompts and exported agent events.
 
@@ -103,7 +103,7 @@ The UI must call these same Python services rather than implement a second analy
 
 ## 6. Scientific tools and four autonomous agents
 
-Each tool is a deterministic, tested Python function returning structured measurements and provenance. Tool candidates: numeric raster summaries, temperature/PSR consistency, terrain slope/curvature checks, prediction boundary/discontinuity and missingness checks, raw-data validity and geometry checks. Unsupported modalities disable corresponding tools rather than fabricate substitutes.
+Each tool is a deterministic, tested Python function returning structured measurements and provenance. The P2 version is implemented, with ten initial tools and a typed `ToolMeasurement` model; a mixed-unit dictionary's numerical fields must always be displayed with their individually correct units, never assigned the enclosing measurement's unit indiscriminately. Tool candidates: numeric raster summaries, temperature/PSR consistency, terrain slope/curvature checks, prediction boundary/discontinuity and missingness checks, raw-data validity and geometry checks. Unsupported modalities disable corresponding tools rather than fabricate substitutes.
 
 | Agent | Distinct resources | Independently decides |
 | --- | --- | --- |
@@ -112,7 +112,7 @@ Each tool is a deterministic, tested Python function returning structured measur
 | Prediction Auditor | Raw NASA–IBM predicted raster, model/run metadata | Which prediction artifacts are questionable |
 | Skeptic / Investigation Planner | Published evidence and test-request tools | Challenges, counter-tests, research priority changes |
 
-Use **Microsoft Agent Framework** with concurrent tool-capable agents, typed events to an append-only **SQLite** evidence store, and asynchronous delivery to interested agents. They can publish without a central LLM approving their work. A neutral supervisor enforces max events/hops, deduplication, tool budgets, timeout and final snapshot, **not scientific decision order**. Same initial region can produce genuine new investigation events on each permitted run.
+**Do not activate the full four-specialist scientific claim until the real SomBench TMAX, LPSR and SLOPE pixelwise layers are successfully paired to the P1 predicted sector** (the current published smoke fixture supplies only the prediction raster, a tile scalar and single-anchor metadata). Obtain these in implementation phase P4, before P5 implements the framework runtime. Use **Microsoft Agent Framework** with concurrent tool-capable agents, typed events to an append-only **SQLite** evidence store, and asynchronous delivery to interested agents. They can publish without a central LLM approving their work. A neutral supervisor enforces max events/hops, deduplication, tool budgets, timeout and final snapshot, **not scientific decision order**. Same initial region can produce genuine new investigation events on each permitted run.
 
 Use one configurable frontier LLM provider/model for all roles at first (OpenAI, Anthropic, or Gemini as supported by an adapter proven to work). Model-ID/version is configuration, not hardcoded; failure to supply a key must produce a useful clear setup error, while deterministic analysis/replay still works.
 
@@ -154,7 +154,7 @@ Hold fixed input cases, split, permitted tools, accessible modalities, total LLM
 
 **Compute:** CPU + external LLM API sufficient for core app; optional H100 for offline checkpoint inference. Do not make live investigation depend on GPU availability. Python 3.11 recommended; keep upstream MOONATLAS/model execution in a **separate environment** from MAF/Streamlit to avoid conflicts.
 
-**Completion gates:** (G1) real validated source, (G2) deterministic computed scientific result, (G3) at least two distinct selectable validated regions (or explicitly partial), (G4) communicating autonomous agents including a challenged and revised finding, (G5) repeatable verification bundle, (G6) measured matched-budget evaluation with honest results, (G7) a 2-minute live/replay demo + slides. One failed gate cannot be disguised by UI.
+**Completion gates:** (G1) real validated source **DONE**; (G2) deterministic computed scientific result **DONE**; (G3) sealed blind evaluation and no-reference-leakage contract (P3); (G4) at least one **same-tile** verified source prediction paired with pixelwise SomBench thermal/PSR/slope arrays, with two paired selectable regions targeted (P4; partial if one); (G5) genuine communicating Microsoft Agent Framework investigation (P5); (G6) repeatable offline verification bundle (P6); (G7) actual matched-budget comparative evaluation (P7); (G8) functional minimal Streamlit UI + authentic demonstration (P8). One failed gate cannot be disguised by UI.
 
 **Hackathon deadline:** 2026-11-01 13:00 America/New_York for final slides/end of hacking per official site. Presentation starts 14:30. 2-minute delivery is our chosen target, not a published competition-mandated time cap.
 
@@ -170,4 +170,4 @@ Hold fixed input cases, split, permitted tools, accessible modalities, total LLM
 - Main risk: one published smoke region with limited modalities is **not** enough for a real 4-specialist evaluation. Fetch test observations early; label support per region. If data access fails, preserve a smaller truthful demo and explicit limitations.
 - No fine-tuning, bespoke scientific model training, arbitrary Moon coverage or full research paper before core validation.
 
-**Build order and conflict-prevention policy:** See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). This spec is the single immutable acceptance contract until a documented, approved version change.
+**Build order and conflict-prevention policy:** See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), revision 3.0. The sequence is P3 sealed evaluation boundary → P4 original SomBench observations and exact prediction pairing → P5 Microsoft Agent Framework → P6 verified reports → P7 benchmark → P8 UI. This spec is the single immutable acceptance contract until a documented, approved version change.

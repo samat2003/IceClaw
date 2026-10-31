@@ -1,293 +1,351 @@
-# IceClaw — Codex Implementation Plan
+# IceClaw — Engineering Implementation Plan
 
-**Version:** 1.0, 2026-10-31  
-**Status:** executable roadmap, **not an implementation-complete report**  
-**Read first:** [PROJECT_SPEC.md](PROJECT_SPEC.md), which is authoritative for semantics and interfaces.  
-**GitHub:** https://github.com/samat2003/IceClaw
+**Revision:** 2.0 · 2026-10-31  
+**Status:** NOT IMPLEMENTED. This document specifies what to build and how to prove each milestone works.  
+**Authoritative product/science contract:** [PROJECT_SPEC.md](PROJECT_SPEC.md)  
+**Repository:** https://github.com/samat2003/IceClaw
 
-## 0. How the two documents stay synchronized
+## 0. Immutable decisions and rules
 
-- **PROJECT_SPEC.md** owns product promises, science definitions, event/data schema, required behaviors, file layout and judge acceptance gates.
-- **This file** owns installation, execution order, test commands, phase-specific ownership and exit criteria.
-- If an older README, GitHub issue or docs/SCIENTIFIC_PROTOCOL.md contradicts these, prefer the two canonical documents and document the discrepancy in a commit; do not silently mix two architectures.
-- **Single application architecture:** Python 3.11 + Microsoft Agent Framework + scientific tools + Streamlit + SQLite. **No FastAPI, React, Redis or LangGraph in MVP.**
-- **Separate upstream execution:** MOONATLAS and NASA inference run through a separately pinned Python environment/subprocess; IceClaw consumes the exported validated artifacts. Never import a second independent version of the upstream stack into the main app process.
-- **One backend service contract:** CLI and UI call identical Python services. Never reimplement measurements in Streamlit.
-- **Upstream version and artifact contracts pinned before use.** Do not invent installation flags, model import paths, or provider class APIs; inspect the installed package and official samples and write a 10-line runtime probe first.
-- **No 'placeholder success':** if a gate fails, report BLOCKED or PARTIAL and invoke the specified fallback; don't insert fabricated measurements, fictional events, or hardcoded benchmark results.
-- Every completed phase must leave a green small test suite, a documented command and a Git commit. Later phases may extend contracts only through explicitly reviewed, backwards-compatible schema changes.
+### Product
 
-## 1. Where to run Codex and the app
+A reusable research workbench for **auditing lunar ice-prospectivity predictions**. The user selects a verified covered south-polar data tile and runs a new investigation. Four independent scientific specialists use deterministic tools and exchange evidence. Outputs are an auditable report, actual source measurements, a prioritization of follow-up research, and reproducible benchmark evidence.
 
-**Preferred:** Your own machine with Git, Python **3.11**, VS Code and Codex CLI. Codex works in the *local clone* and can install dependencies and run tests. Push commits to `samat2003/IceClaw`. Use a Google Cloud VM only if the computer cannot handle scientific dependencies or you need a publicly accessible demo. GPU/Nebius is optional for offline NASA checkpoint inference, not the agent loop.
+**Never assert discovery of actual ice.** The prediction and expert reference are prospectivity indices, **not** direct ice detections, ice probabilities, or independent ground truth.
 
-The **Codex coding-agent sign-in** is separate from runtime credentials: sign in to Codex with your ChatGPT account (no science API key needed just to code). The **four IceClaw scientists** use a model API key configured only in the app runtime. Do not paste any API key into prompts, commits or screenshots.
+### Final technology choices
 
-### macOS/Linux/WSL: one-time prerequisites
+| Layer | Technology | Process boundary |
+| --- | --- | --- |
+| Application/runtime | Python 3.11 or 3.12 (one version per environment) | One local application |
+| Scientific numerics | NumPy, Pandas, SciPy, Rasterio, pyproj | Pure/tested tools |
+| Scientific model | NASA–IBM Lunar Foundation Model | Offline batch inference only |
+| Data normalization/provenance | MOONATLAS Science | Separate pinned Python environment, export read-only validated artifacts |
+| Specialist agents | **Microsoft Agent Framework** | Python application environment |
+| Agent LLM | OpenAI via `agent-framework-openai` / `OpenAIChatClient` | Key from runtime environment, model passed explicitly |
+| Concurrency/events | `asyncio` + append-only SQLite | No central LLM supervisor |
+| Interface | Streamlit + Plotly | Same Python services as CLI |
+| Tests | pytest, pytest-asyncio where required, Ruff | No remote API in default tests |
+| Deployment | WSL/local initially; optional single-VM Streamlit | No mandatory GPU or microservices |
 
-Install Git, Python 3.11, and a terminal. Install Codex (choose one):
-~~~bash
-npm install -g @openai/codex
-# OR standalone installer:
-# curl -fsSL https://chatgpt.com/codex/install.sh | sh
-~~~
+Do **not** add FastAPI, Next.js/React, Redis, Celery, LangGraph, a vector database, model fine-tuning or arbitrary file uploads to the MVP. Do not place heavy PyTorch/TerraTorch dependencies in the Streamlit/agent environment.
 
-Clone and launch:
-~~~bash
-git clone https://github.com/samat2003/IceClaw.git
-cd IceClaw
-git status
-python3.11 --version
-codex
-~~~
+### One source of truth
 
-For Windows native, use the official Codex PowerShell installer, Git and Python 3.11; activate the Python environment with `.venv\Scripts\Activate.ps1`. WSL2 is preferable if native geospatial dependencies cause problems.
+- Science and product claims, typed data contracts, input/output rules: `docs/PROJECT_SPEC.md`.
+- This document: phase ownership, module boundaries, test gates and runtime commands.
+- `docs/SCIENTIFIC_PROTOCOL.md` and `docs/DEMO_2MIN.md`: earlier background drafts; these must not override the two canonical documents.
+- If code requires a contract change, update `PROJECT_SPEC.md` with the rationale and a schema migration/test *before* making the code change.
+- Implementation proceeds one phase at a time. Never skip a failed gate and silently call the feature finished.
 
-**Inside Codex:** sign in with ChatGPT if prompted; run `/status` to inspect configuration and `/permissions` to use an approval mode you understand. Start in this repo directory. The root `AGENTS.md` file is created in phase 0 and will tell Codex to read BOTH canonical documents. Use `/review` and inspect diffs between phases.
+### Scientific data firewall (non-negotiable)
 
-**First Codex instruction (planning + Phase 0 only):**
-> Read docs/PROJECT_SPEC.md and docs/IMPLEMENTATION_PLAN.md completely. Work only on Phase 0. Explain any unresolved dependency compatibility and do not invent scientific results, change the canonical schemas, or read secret files. Create the minimal repository scaffold and tests. Run them, show exact results, then stop for review.
+The internal `RegionCatalogEntry` may contain a reference-prospectivity file path. **Never pass that model directly to agents.** Derive an explicit `AgentRegionContext` containing only approved observations, NASA–IBM prediction, visible provenance, available tool names, and limits. Reference targets and hidden injected-fault manifests reside in evaluator-only storage/services. No agent tool may open arbitrary files or call evaluator functions. Tests must assert these forbidden fields and data are absent from prompts, tool arguments and event logs.
 
-### Runtime secrets — different from Codex credentials
+### Working-directory assumptions
 
-During Phase 0 create an untracked `.env` mechanism (or use shell environment/secret manager) and commit only `.env.example` listing variable names, never values:
-~~~dotenv
-ICECLAW_LLM_PROVIDER=openai
-ICECLAW_LLM_MODEL=replace-with-verified-model-id
-OPENAI_API_KEY=
-# Alternatives only if their provider adapter is implemented:
-ANTHROPIC_API_KEY=
-GOOGLE_API_KEY=
-ICECLAW_DATA_ROOT=./data/processed
-ICECLAW_RUNS_ROOT=./runs
-~~~
+- WSL repository at `~/IceClaw`. Existing `.env` is user-owned: **never open, rewrite, delete or commit it**.
+- GitHub branch `main`; local changes must be reviewed before any `git pull` or push.
+- OpenAI runtime key: `OPENAI_API_KEY`; model config: `ICECLAW_LLM_MODEL` (a model ID the user has independently verified); provider: `ICECLAW_LLM_PROVIDER=openai`.
+- Coding-tool authentication is **not an IceClaw runtime dependency**.
+- Default and CI tests must work without API keys or internet. Integration runs requiring the NASA checkpoint or real LLM are marked separately.
 
-Choose and verify **one** provider first. For OpenAI, use the OpenAI Platform API key awarded for the hackathon, if available. Never confuse it with Codex's ChatGPT sign-in. The app must never print secrets, and tests must use a fake provider without external API calls. In CI, use repository secrets only if a separately approved integration test requires real credentials; default CI never does.
+## 1. Component architecture (import direction)
 
-Ensure `.env`, `.venv*`, `.upstream/`, `data/`, `runs/`, model checkpoints, caches and local log files are ignored by Git. Generated plots/reports must be reviewed for sensitive prompts before publishing.
+```text
+Streamlit app.py --------> iceclaw.services ----------------> reports
+CLI iceclaw.cli ---------> iceclaw.services ---------> swarm/agents -----> science
+                                |                         |                   |
+                                +----> catalog/data -------+-------------------+
+                                                           
+evaluation (sealed reference/fault truth) -----> archived/frozen run outputs
+                    [never imported by agents/science tools]
+```
 
-## 2. Fixed technical dependencies
+**Allowed dependencies:**
 
-The implementation should create a `pyproject.toml` for IceClaw with compatible, tested, **pinned** versions after verifying package import and minimal operations:
+- `contracts` is foundational; all modules may import it.
+- `config` reads settings; does not expose secret values in logs, reports or exports.
+- `data` reads/validates upstream artifacts and exposes covered samples, with clear provenance.
+- `science` uses data + numeric utilities only; no LLM, Streamlit, or evaluation labels.
+- `swarm` manages event delivery, budgets and SQLite; `agents` uses MAF and only approved scientific tool functions.
+- `reports` creates/validates saved bundles from real inputs, science tool outputs and logged events.
+- `evaluation` owns hidden truth and frozen-run scoring; it may import public science tools but is not imported by `agents`, `swarm`, or `data.public`.
+- `services` is the **only application-facing investigation API**; both CLI and UI call it. Do not reimplement science or event logic in `app.py`.
 
-- Runtime: Python 3.11; NumPy, Pandas, SciPy, Pillow, Rasterio, pyproj, Pydantic, Streamlit, Plotly.
-- Agents: **Microsoft Agent Framework** (choose the package and provider integration from the official current Python samples, for example `agent-framework` / `agent-framework-core`), one model SDK/provider, and standard-library `asyncio` + `sqlite3`.
-- Science: MOONATLAS is **not an import dependency** of the UI app; read its versioned outputs. Source scientific package installation lives in `.upstream/moonatlas-science/.venv`.
-- Tests: pytest, pytest-asyncio (as needed), Ruff; local fixtures deliberately small and deterministic.
-- Optional only: huggingface-hub / PyTorch / TerraTorch inside the **upstream model** environment, never required for the Streamlit process.
+Proposed committed repository:
 
-Install the IceClaw app only **after** Phase 0 creates `pyproject.toml`:
-~~~bash
-python3.11 -m venv .venv
+```text
+IceClaw/
+  README.md
+  AGENTS.md                     # short universal repository guidance
+  CLAUDE.md                     # short reference to AGENTS.md, not a duplicate spec
+  .gitignore
+  .env.example                  # placeholders only
+  pyproject.toml
+  app.py                        # created at Phase 8
+  src/iceclaw/
+    __init__.py
+    config.py
+    contracts.py                # RegionCatalogEntry, AgentRegionContext, EvidenceEvent, InvestigationBundle
+    cli.py
+    services.py
+    data/
+      catalog.py
+      moonatlas_adapter.py
+      validation.py
+    science/
+      raster_metrics.py
+      thermal.py
+      terrain.py
+      model_audit.py
+    swarm/
+      store.py                  # SQLite append-only log and subscriptions
+      runtime.py                # async execution, limits, cancellation
+    agents/
+      provider.py               # MAF OpenAI client integration
+      specialists.py            # four configured agents
+      tools.py                  # approved deterministic tool adapters
+    reports/
+      export.py
+      verify.py
+    evaluation/
+      fixtures.py
+      faults.py
+      baselines.py
+      runner.py
+      score.py
+  tests/                        # contracts, readers, tools, event store, firewall, replay, benchmarks
+  scripts/                      # optional pinned upstream preparation wrappers
+  docs/
+    PROJECT_SPEC.md
+    IMPLEMENTATION_PLAN.md
+    SCIENTIFIC_PROTOCOL.md
+    DEMO_2MIN.md
+  .upstream/                     # ignored MOONATLAS checkout
+  data/                          # ignored raw/normalized scientific files
+  runs/                          # ignored per-investigation outputs
+```
+
+Use these names unless there is a documented compelling technical conflict. The modules can be small: avoid creating unused abstractions or placeholder microservices.
+
+## 2. Frozen data contracts (implement exactly once)
+
+**Source of authority:** `PROJECT_SPEC.md` §5. Use Pydantic 2 or typed dataclasses with explicit validation. At minimum:
+
+**`RegionCatalogEntry` (private full record):** region ID, pole, original source tile/split, original dataset and processing revision, source hashes/manifests, native lunar CRS/affine transform/footprint, width/height/pixel resolution, available modalities and unit/nodata metadata, raw prediction path/checkpoint, evaluator-only reference path, readiness and failure reasons.
+
+**`AgentRegionContext` (public restricted projection):** ID, covered footprint, raw *prediction access via approved tool*, instrument layers allowed for that case, source/provenance IDs, advertised available scientific tools and run budget. Must exclude reference raster paths, labels, hidden fault descriptions, global evaluator root path, any secret. Construct via an explicit allowlist rather than serializing the full record with a blacklist.
+
+**`EvidenceEvent` (durable append-only):** event ID, run ID, region ID, time, origin agent, event kind, parent IDs, structured claim/test, cited source/tool run IDs, numeric value and unit if present, status, limitations and errors. Event kinds are `claim`, `measurement`, `challenge`, `test_request`, `test_result`, `revision`, `completion`, `failure`. A challenge points to an earlier claim and a revision points to a qualifying piece of new evidence; missing evidence must be flagged.
+
+**`InvestigationBundle` (under `runs/<id>`):** `input_manifest.json`, `events.jsonl`, `evidence.json`, `report.md`, `rankings.csv`, `verification.json`, optional `plots/`. Bundle stores executed tool IDs/parameters, file checksums, data split/revision, model/provider ID (never credentials), code SHA, science availability/limitations. Saved LLM responses are audited, but exact LLM wording is not expected to reproduce.
+
+**`ToolMeasurement` (introduced here):** typed science response with `tool_id`, parameters, region/footprint, source file IDs and SHA256, raw numeric result or unavailable reason, units, valid-pixel count, scale/resolution, reproducibility tolerance and deterministic implementation version. `EvidenceEvent` refers to `ToolMeasurement` by unique `tool_run_id`.
+
+**One storage rule:** raw model output is numeric and remains unmodified, even outside [0,1]. Display PNG/WebP is never used for numerical analyses. The MOONATLAS example may contain only *single-anchor* thermal/terrain metadata; do not pretend that is a full spatial field.
+
+## 3. Environment and package setup
+
+**Do this only when Phase 0 creates `pyproject.toml`.** The repo currently contains planning documents and no executable Python package.
+
+```bash
+cd ~/IceClaw
+python3 --version                     # must be 3.11 or 3.12
+python3 -m venv .venv                 # only if .venv does not exist
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 python -m pytest -q
-~~~
-For reproducibility record exact resolved dependency versions (lock/constraints file) once the package imports and core smoke tests pass, and pin the upstream Git commit SHA, model checkpoint revision, and MOONATLAS data-contract schema version. No guessed versions in plan text.
+```
 
-## 3. Integration topology and canonical file ownership
+The project depends on installed `agent-framework-openai` for direct OpenAI inference. Current documented Python imports are `from agent_framework import Agent` and `from agent_framework.openai import OpenAIChatClient`, with `OpenAIChatClient(model=...) `. **Verify a minimal import/execution probe against the exact installed version before depending on any class or workflow API**; some older examples use renamed clients. Keep OpenAI usage behind `agents/provider.py`.
 
-~~~text
-IceClaw/
-  app.py                          # Streamlit ONLY (Phase 7)
-  pyproject.toml                  # Phase 0, pinned after probes
-  AGENTS.md                       # Phase 0, Codex contract referring to two docs
-  .env.example / .gitignore      # Phase 0
-  src/iceclaw/
-    contracts.py                  # Phase 0; canonical typed Region / Event / Bundle models
-    cli.py                        # Phase 0 shell; commands extended at gates
-    data/                         # Phases 1-2; MOONATLAS read-only adapter/catalog
-    science/                      # Phase 3; deterministic numerical checks
-    evaluation/                   # Phase 4 harness and Phase 8 experiments
-    agents/ and swarm/            # Phase 5; MAF, events, SQLite, budgets
-    reports/                      # Phase 6; evidence + exports + verification
-  tests/                          # Added incrementally WITH each module
-  docs/PROJECT_SPEC.md            # Canonical product + science
-  docs/IMPLEMENTATION_PLAN.md     # This roadmap
-  docs/DEMO_2MIN.md               # Earlier provisional script; update in Phase 8
-  artifacts/                      # Small attributable output/examples if license permits
-  data/, runs/, .upstream/        # Gitignored local data, investigations and upstream checkout
-~~~
+The application should load local `.env` via `python-dotenv` during startup **without printing its values**. Do not create/overwrite the user's existing `.env`. A missing key should not prevent `list-regions`, numeric tools, saved-run verification, or viewing a completed replay; only the live investigation reports `MISSING_API_KEY`. Use `.env.example` as a template, never as real credential storage.
 
-Phase boundaries and imports:
-- `data` defines validated catalog/read-only raster loading; **does not import** agent framework or UI.
-- `science` imports `contracts` and data readers only; **does not import** LLM or UI.
-- `evaluation` imports deterministic science and run/evidence records; **never exports hidden answers into agent-visible functions**.
-- `agents` calls exposed science tool functions; `swarm` persists events; neither directly loads expert reference.
-- `reports` verifies science + immutable events and exports a bundle.
-- `app.py` calls shared library functions/CLI services only. It never computes scientific metrics in widget callbacks.
-- Repository scientific truth is in original raw source artifacts + validation. Visualization rasters are not numerical evidence.
-
-## 4. Phase-by-phase plan (one Codex task and checkpoint at a time)
-
-### Phase 0 — Foundation and contract tests (target 60–90 min)
-
-**Create:** `pyproject.toml`, `.gitignore`, `.env.example`, `AGENTS.md`, typed `src/iceclaw/contracts.py`, CLI stub and small tests. Point AGENTS.md to the two canonical docs; enforce scientific integrity and secrets policy. Make placeholders raise `NotImplementedError` rather than print success.
-
-**Test:** fresh Python 3.11 venv; `python -m pytest -q`; `python -m iceclaw.cli --help`. Every required contract serializes/deserializes and rejects missing required scientific metadata.
-
-**Exit:** clean install + tests + help works; commit. **Do not build agents, dashboard or make any API call in Phase 0.**
-
-### Phase 1 — Upstream verified fixture and data-contract probe (target 1–2 h)
-
-**Prerequisite:** Phase 0.
-
-**Create:** `src/iceclaw/data/moonatlas_adapter.py` and scientific provenance notes. Separate upstream checkout:
-~~~bash
-mkdir -p .upstream
+**Separate scientific environment** for MOONATLAS/NASA (only Phase 1+) lives at `.upstream/moonatlas-science/.venv`:
+```bash
 git clone https://github.com/RRG1312/moonatlas-science.git .upstream/moonatlas-science
 cd .upstream/moonatlas-science
-git rev-parse HEAD
-python3.11 -m venv .venv
+git rev-parse HEAD                       # record exact upstream SHA
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-pytest
-moonatlas-science validate --root examples/science-smoke --scope published
-python -m moonatlas_science.contracts
-~~~
-Return to repo root and main `.venv` before running IceClaw tests.
-
-**Inspect actual files**, not just README claims: `ice-sectors.json`, `ice-mosaics.json`, `sources.json`, processing manifest, raw/encoded prediction raster and available source modality files. Record published-example source/split/revision, actual projection and geometry. Read contract v2. Differentiate one-point 'atAnchor' values from whole-raster measurements.
-
-**Tests:** decode raw *numeric* raster and verify a few exact positions plus shape/CRS/mask; recompute metadata summary against published values within a declared tolerance. Missing source outputs are a blocking error, not replaced with demonstration data.
-
-**Exit:** MOONATLAS validation passes AND one genuine region loads with provenance and numeric evidence. Explicitly label it **upstream published fixture**, not freshly rerun NASA inference.
-
-### Phase 2 — Two-region catalog and original observations (target 2–3 h; highest data risk)
-
-**Prerequisite:** Phase 1. **Owns:** `data/catalog.py`, `data/validation.py`, download/preparation scripts and tests.
-
-Use actual official held-out SomBench split/sample files and MOONATLAS acquisition commands to obtain multiple south-polar regions with provenance. Need **original input arrays** to support actual thermal/geology analyses; prediction/reference fixture alone is not enough. For model inference, run the pinned official MOONATLAS environment and its documented smoke/infer commands after inspecting available CLI flags. The upstream describes checkpoint assets totaling ~6.3 GB; a GPU can accelerate the batch but is NOT required for UI/agents.
-
-Create a batch-validated catalog with `RegionCatalogEntry` records (data/coverage/readiness/modality availability). Enforce unique IDs and exact footprint; verify no invented synthetic tiles or unsupported geographic assumptions (the initial sector must not silently become 'Cabeus'). Preserve all source hashes and checkpoint IDs.
-
-**Test:** `python -m iceclaw.cli list-regions` lists verified regions and readiness, and science loaders distinguish at least two real source samples. Disable tools that lack input modalities.
-
-**Exit target:** two or more real south-polar regions, each with numeric evidence and source provenance. **Fallback (explicit PARTIAL):** one real fixture only, UI can still investigate it but must not claim multi-region generality. Time-box data acquisition; do not block later deterministic tool development indefinitely.
-
-### Phase 3 — Deterministic scientific tools (target 1.5–2 h)
-
-**Prerequisite:** validated data contracts. **Owns:** `science/` and tests.
-
-Implement separate pure tools returning measurements with source IDs/units/coverage: raster descriptive stats, no-data counts, temperature/PSR consistency (only if pixelwise inputs exist), terrain measurements (only where source data exist), prediction discontinuity/edge tests, and any reproducible comparison utilities. Do not infer ice detections from high indices. Make result schema compatible with `EvidenceEvent`.
-
-**Tests:** known synthetic numeric arrays for formula correctness; a genuine NASA/MOONATLAS array integration test for each available modality; missing data returns a typed 'unavailable', not fabricated values.
-
-**Exit:** selected region yields an independently recomputable actual numeric measurement and source-attached scientific finding, entirely offline.
-
-### Phase 4 — Blind evaluation harness BEFORE model-agent tuning (target 1–1.5 h)
-
-**Prerequisite:** Phase 3. **Owns:** `evaluation/cases.py`, `evaluation/sealed_manifest.py`, baselines, tests.
-
-Define case-level synthetic perturbations on copies of authentic source arrays (e.g., subtle offset, cross-layer inconsistency, coordinate shift, missing layer) plus clean controls. Store hidden fault manifest in evaluator-only path; never let agent tools or prompts read it. Define target classifications, predeclared metrics, case/split IDs, seeds, budgets, and source independence.
-
-Pre-register the real-disagreement experiment: predicted ranking without target access, freeze ranking, then score against held-out expert reference. **No tuning on test labels.**
-
-**Tests:** seed repeatability, clean-control stability, hidden manifest not imported by agents, and deterministic rule baseline.
-
-**Exit:** fixed test cases and baseline values; save the case manifest hash before any comparative agent runs.
-
-### Phase 5 — Real Microsoft Agent Framework swarm (target 3–4 h)
-
-**Prerequisite:** Phases 3–4. **Owns:** `agents/`, `swarm/`, MAF provider adapter and tests.
-
-First run a **minimal official MAF example** with a verified installed package/provider: one agent calls one deterministic IceClaw tool; a concurrent two-agent example streams events. Only then add four specialists and the shared typed event bus backed by SQLite. Do not substitute generic `asyncio.gather` for the MAF agent implementation; standard asyncio is fine for scheduling/delivery.
-
-Implement: autonomous per-agent task selection, event subscription, challenge references, follow-up test request/execution, independently generated revision, max hops, dedup, bounded tokens/calls, timeout, failure isolation. Avoid a centralized LLM manager that dictates the entire trace. Use a recorded fake provider in tests, but authentic frontier API calls for actual demo runs.
-
-**Test:** trace includes a real region-specific scientific tool call and (when scientifically warranted) agent-to-agent challenge + evidence-linked revision. Concurrent activity and message delivery are measurable. Case where no contradiction exists must *not* manufacture one.
-
-**Exit:** one authentic complete live swarm investigation with genuine model API output, actual tools and event history; persistent SQLite recovery works.
-
-### Phase 6 — Verification, CLI and downloadable report (target 1.5–2 h)
-
-**Prerequisite:** Phase 5. **Owns:** `reports/`, `cli.py` integration and tests.
-
-Implement `list-regions`, `investigate --region`, `verify --run`, report exporter, JSONL event persistence and a complete `InvestigationBundle` including verifiable source/checkpoint/input and code revisions. Report comprises claims, measurements, contradictory evidence, uncertainty, missing modalities and recommended next tests. Rankings mean **priority for further investigation**, never physically calibrated ice probability.
-
-**Test:** freeze a real run, verify file hashes and recompute at least one scientific result without the LLM. A tampered raw input or missing manifest must fail. Replay reads exactly the saved run—no synthetic chat conversation.
-
-**Exit:** reviewer can download a run and verify its numeric evidence using the CLI offline.
-
-### Phase 7 — Streamlit workbench (target 1.5–2 h)
-
-**Prerequisite:** Phases 2 and 6. **Owns:** `app.py` only, lightweight UI tests.
-
-Build ONE page with region dropdown populated from catalog, available modalities/coverage, **Investigate** button, scientific 2D heatmap with real coordinates, timeline of genuine events, source-linked findings, **Verify** action, saved-run replay, and bundle download. The app calls library methods used by CLI. Keep layouts standard; avoid maps that imply global scientific coverage.
-
-~~~bash
-python -m streamlit run app.py
-~~~
-
-**Test:** choose different supported region(s), see different region/source IDs and measurements. Unsupported coordinate or absent data must show informative error, no fake success. UI must work offline for saved verified bundles.
-
-**Exit:** two-region interactivity if Phase 2 passed, or explicitly labeled one-region partial demo if data coverage prevented it.
-
-### Phase 8 — Execute benchmarks, finalize evidence and 2-minute presentation (target 2–3 h)
-
-**Prerequisite:** Phases 4–7.
-
-Run four arms on the **same** small fixed evaluation cases under recorded comparable total LLM/tool-call budgets: rule baseline, one agent with all tools, four isolated specialists, and communicating IceClaw. Run clean negative controls. Freeze outputs, reveal hidden fault/reference truth to evaluator only, then compute metrics and plots from actual saved results. Track latency, API cost, unsupported-claim count and seed/sample IDs. Report failure/no improvement honestly; do not hardcode a win.
-
-Generate actual scientific result file(s), verification log and 5-slide presentation:
-- 0:00–0:20 lunar problem and physical uncertainty
-- 0:20–0:40 NASA–IBM + MOONATLAS + Microsoft Agent Framework architecture
-- 0:40–1:15 select region, show original numeric evidence, challenge/revision and verification
-- 1:15–1:40 show measured baseline/single/isolated/swarm results and caveat
-- 1:40–2:00 relevance, reusable outputs, GitHub + verification command
-
-Rehearse a two-minute talk; pre-record an *authentic* run as the clearly labeled offline replay fallback. Submit slides by **Sunday 2026-11-01 13:00 America/New_York**.
-
-**Exit:** end-to-end smoke command, UI demo, honest benchmark artifacts, slides and stable repository commit. Do not claim broad scientific discovery with few patches.
-
-### Phase 9 — Optional only after all core gates are green
-
-Potential cross-team reuse: document a small exportable evidence/verification module or minimal API if another team needs it. Scientific additional images, GPU fine-tuning, custom 3D visualization and deployment polish are lower priority. Collaboration bonus requires **actual meaningful reuse by other teams**, not just an open-source link.
-
-## 5. Common command suite (contract, not pre-existing implementations)
-
-Codex must implement these commands in earlier phases before this suite can be run end-to-end:
-~~~bash
 python -m pytest -q
+moonatlas-science validate --root examples/science-smoke --scope published
+```
+Then return to `~/IceClaw` and activate the application `.venv` to run its tests. Do not run `moonatlas-science smoke` or download large checkpoints until the fixture reading works and needed disk/GPU capacity is checked. For full inference use only the upstream documented setup and task configuration, verified at the pinned commit.
+
+## 4. Exact implementation milestones and acceptance gates
+
+### P0 — Packaging, configuration, contracts, CLI shell
+
+**Depends on:** none. **Owns:** package skeleton, `pyproject.toml`, `config.py`, `contracts.py`, `cli.py`, basic tests.
+
+1. Create `src/iceclaw` installable packaging, Python version guards and tested minimal dependencies; separate `dev` extras. Python 3.11 recommended.
+2. Implement typed contracts from §2, with exhaustive validation of required scientific provenance, valid event kinds, positive raster dimensions and absence of reference fields in `AgentRegionContext`.
+3. Centralize settings with `ICECLAW_DATA_ROOT`, `ICECLAW_RUNS_ROOT`, `ICECLAW_LLM_PROVIDER`, `ICECLAW_LLM_MODEL` and `OPENAI_API_KEY`. No key material in log output.
+4. Add CLI subcommands `list-regions`, `investigate --region`, `verify --run`, `benchmark --config`. Until implemented, commands fail with a clear `NOT_IMPLEMENTED`, nonzero exit status. Do not return fake example results.
+5. Add tests and a `pytest -q` runner; add Ruff if compatible.
+6. **Gate:** fresh local install works, `python -m pytest -q` passes, `python -m iceclaw.cli --help` lists commands, malformed contracts raise errors. No live API call.
+
+### P1 — Verify one authentic MOONATLAS scientific artifact
+
+**Depends on:** P0. **Owns:** upstream acquisition notes and `data/moonatlas_adapter.py`, upstream integration tests.
+
+1. Install and run MOONATLAS's upstream example validator in its separate environment as in §3; save pinned revision and command output in local run metadata.
+2. Inspect the actual `examples/science-smoke` directory: `manifest.json`, `sources.json`, `ice-sectors.json`, `ice-mosaics.json`, `processing-manifest.json`, and referenced `overlays/ice/*` numeric files.
+3. Parse real sector `ice-s-0001-0002`; report exactly what the upstream says about pole, footprint, coordinate system, source split, source checkpoint, grid dimensions, raw prediction format and available modalities.
+4. Decode source **raw numeric** prediction through the documented encoding/scale, not the display heatmap. Verify a few decoded pixel positions and source metadata; test missing file and incorrect checksum behavior. Confirm published sample's `atAnchor` is not a pixelwise physical modality.
+5. **Gate:** one real source sector loads and numerical summaries can be recomputed; MOONATLAS published-sample validator passes. Mark `source_mode=upstream_published_example`; never call it fresh IceClaw model inference.
+
+### P2 — Deterministic science library and region catalog
+
+**Depends on:** P1. **Owns:** `data/catalog.py`, `data/validation.py`, `science/*`, tests.
+
+1. Materialize a read-only validated catalog; include exact source/split/checkpoints, valid CRS/affine grid, raster shape, true footprint, units, nodata handling and an explicit list of available modalities.
+2. Build pure functions for valid-pixel summary, native-grid statistics, pixel-distance/edge checks and predictive discontinuity candidates. Thermal/PSR/terrain checks run only when complete relevant input arrays are present.
+3. Return `ToolMeasurement` and an explicit `UNAVAILABLE_MODALITY` / `UNVERIFIED_SOURCE` / `OUT_OF_COVERAGE` failure when appropriate; no guessed values.
+4. **Gate:** `python -m iceclaw.cli list-regions` lists real sector(s); a deterministic tool reports one actual raw-array numerical measurement traceable to the original source checksum. Tests verify array math on small synthetic fixtures and source integration using the authentic sector.
+
+### P3 — Frozen scientific evaluation contract / no-leakage controls
+
+**Depends on:** P2. **Owns:** `evaluation/fixtures.py`, `evaluation/faults.py`, `evaluation/baselines.py`, tests.
+
+1. Prepare small case-level fault scenarios derived by *copying* genuine data: altered metadata/units, spatial shift, missing modality, corrupt prediction, and clean controls. Store true fault labels and seeds in evaluator-only files, never within agent-readable source entries.
+2. Define deterministic anomaly/QC baseline and metrics: precision, recall, F1, clean-case false-positive rate; ensure entire case IDs, not individual pixels, are the counting units.
+3. Define secondary model/reference-disagreement benchmark with **hidden expert target** until prioritization is frozen. Specify Top-K score and split/time budgets in a precommitted manifest.
+4. Verify reference/map leakage impossible through `AgentRegionContext`, tool API, imports and prompts. Unit-test sealed boundary and fixed seeded corruption.
+5. **Gate:** frozen case manifest/hash, source IDs, clean controls and deterministic baseline run. No AI has been tested against the sealed answers yet.
+
+### P4 — Microsoft Agent Framework runtime and event store
+
+**Depends on:** P2 and P3. **Owns:** `agents/*`, `swarm/*`, tests.
+
+1. Confirm direct OpenAI provider package `agent-framework-openai` and current `OpenAIChatClient` API; first implement a tiny MAF agent that invokes one real deterministic IceClaw tool.
+2. Define four independently operating roles: thermal scientist, geology scientist, prediction auditor and skeptic/planner. Their tools are limited to actually available modalities; no promise of a thermal calculation if the input has only one anchor metadata value.
+3. Implement concurrency, subscriber delivery and append-only SQLite event records. At least one agent can request a follow-up test after seeing another agent's finding, and each request/revision references parent evidence IDs.
+4. Scheduler may manage work delivery, retries, max hops, token/tool/event budget, deduplication, timeout and cancellation; **not** prescribe the scientific findings. Use MAF as the true agent runtime, not four simulated role strings.
+5. Offline tests use a fake model provider and deterministic numeric fixtures. Live tests use the configured OpenAI key and capture provider/model ID, actual API responses, actual MAF tool calls, and actual event timestamps. Do not make the code print `.env`.
+6. Do not force a disagreement: if no contrary evidence exists, agents may conclude insufficient data, unresolved or no detected issue.
+7. **Gate:** a genuine live run produces a real source-backed scientific tool result plus independently recorded events, and an evidence-triggered cross-agent follow-up where warranted. An absent API key yields a clear error for live mode, without breaking offline science.
+
+### P5 — Investigation service, verifiable bundle and replay
+
+**Depends on:** P4. **Owns:** `services.py`, `reports/export.py`, `reports/verify.py`, CLI implementations, tests.
+
+1. Implement a shared `InvestigationService` entry point used by UI and CLI. Accept verified region ID, mode (`live` or `replay`), and bounded options; create a unique run ID.
+2. Save all authentic activity and numeric provenance to `runs/<run_id>/` under the exact bundle contract (§2). Generate Markdown conclusion with alternatives, uncertainty, unresolved questions, missing modalities and recommended tests.
+3. Implement `python -m iceclaw.cli investigate --region ID` and `python -m iceclaw.cli verify --run ID`. Verification runs without a model API: checks files/hashes, source/CRS, event references, and recomputes at least one saved deterministic measurement within declared tolerance.
+4. Replay only saved authentic events. Do not fabricate agent interactions or edited scores for a presentation.
+5. **Gate:** offline verifier passes an authentic saved bundle; modified source raster, wrong hash or missing event parent fails verification; CLI returns nonzero exit code on failure.
+
+### P6 — Multi-region real-data catalog
+
+**Depends on:** P1, P2 and P5. **Owns:** data preparation scripts and catalog integration tests.
+
+1. Retrieve additional held-out **actual** south-polar SomBench samples, inspecting official split manifests and source modality tensors. Prepare NASA–IBM outputs using a pinned MOONATLAS run when feasible; reuse the published outputs where correctly attributable.
+2. Validate samples independently and append covered regions to catalog. Keep raw input artifacts/checkpoints outside Git. Record exactly whether each region is a published upstream output or a locally reexecuted checkpoint; log input-layer availability.
+3. Test selecting two distinct real regions yields different source files, raster values and evidence. Do not infer Cabeus/Shackleton coverage from the region name.
+4. **Gate target:** at least two covered verified south-polar regions. If data access/compute blocks this, mark `PARTIAL_ONE_REGION` and continue to P7–P8 with truthful limits; never synthesize a second source region.
+
+### P7 — Matched-budget experiment and reproducible scoring
+
+**Depends on:** P3, P4, P5. Can run alongside P6 after P5. **Owns:** `evaluation/runner.py`, `evaluation/score.py`, experimental artifacts, tests.
+
+1. From one frozen, sealed case list run: (A) deterministic baseline; (B) one LLM scientist with all allowed tools; (C) isolated four specialists with communication disabled; (D) full communicating IceClaw swarm.
+2. Fix information, cases, total API-call/token/tool budgets, code/data revisions, repeat count/seeds (where supported), and allowed tool access. Preserve actual budget consumption; do not silently give the swarm four times the inference.
+3. Freeze each arm's predictions/rankings and run files before evaluator-only hidden fault labels/reference are revealed. Score seeded fault detection and clean controls; separately score untouched reference-disagreement prioritization. Report insufficient sample size, uncertainty and bias.
+4. Export real CSV/JSON results and charts from saved metrics; include elapsed time, cost/tokens and unsupported scientific claims.
+5. **Gate:** at least one honest measured comparison with raw per-case outputs and evaluator command that reproduces reported numbers. If not enough runs, state results as an exploratory demonstration; never print invented superiority.
+
+### P8 — Minimal Streamlit UI, final integration and presentation
+
+**Depends on:** P2, P5 and scored experiments from P7 when available. **Owns:** `app.py`, UI integration tests, docs/demo updates.
+
+1. One Streamlit page only: dropdown from verified catalog, available modalities/source info, a `Start investigation` action, 2D lunar-georeferenced prediction heatmap, authentic timeline, evidence/limitations, `Verify` button, download saved report/bundle, real benchmark summary.
+2. `app.py` calls `InvestigationService` / same functions as CLI; never duplicates scientific math, loads hidden reference into the agent context, or invents a successful run.
+3. Support authentic replay without a current API key, clearly labeled `Recorded run`. A region with missing science inputs displays relevant tool as unavailable.
+4. **Gate:** `python -m streamlit run app.py` opens; real user selection triggers a genuine new investigation in live mode; saved-run verify works; source file, values and run ID change when a second validated region is selected.
+5. Prepare at most five concise slides and a two-minute explanation using **only executed** results, with a pre-recorded authentic replay fallback and a command judges can run to verify a finding.
+
+## 5. Command contract and test matrix
+
+**These are commands to implement during the phases above, not a claim they currently exist.**
+
+```bash
+# Main application venv after P0
+python -m pytest -q
+python -m iceclaw.cli --help
+
+# P2+
 python -m iceclaw.cli list-regions
+
+# P5+ (requires valid API configuration for live mode)
 python -m iceclaw.cli investigate --region ice-s-0001-0002
-python -m iceclaw.cli verify --run <run-id>
-python -m iceclaw.cli benchmark --config artifacts/benchmark-config.json
+python -m iceclaw.cli verify --run RUN_ID
+
+# P7+ (path generated by P3 / checked in only when devoid of hidden labels)
+python -m iceclaw.cli benchmark --config PATH_TO_APPROVED_CONFIG
+
+# P8+
 python -m streamlit run app.py
-~~~
-`benchmark-config.json` is generated/approved in Phase 4; don't run against fake filenames before then. CI runs fast deterministic tests with a fake provider and no large model downloads. Full NASA/MOONATLAS inference tests must be explicitly marked as optional external integration tests.
+```
 
-## 6. Phase-handoff checklist to avoid conflicts
+| Test suite | Data/API dependency | Must pass |
+| --- | --- | --- |
+| Contract/schema tests | None | P0 onward |
+| Raw raster + provenance adapter | Published real MOONATLAS smoke fixture | P1 onward |
+| Numerical methods / missing modalities | Small deterministic fixtures + authentic source | P2 onward |
+| No-leakage benchmark guards | Synthetic sealed cases | P3 onward |
+| Async event store / fake provider | None | P4 onward |
+| Full live MAF provider integration | OpenAI API key + source data | Explicit opt-in P4 onward |
+| Bundle verify / tamper test | Authentic archived tool outputs | P5 onward |
+| Multi-region selection | Second verified held-out sector | P6 if available |
+| Scoring reproducibility | Frozen scored case files | P7 onward |
+| Streamlit UI smoke | Catalog + authentic saved bundle | P8 |
 
-At the end of every Codex phase, inspect and record:
-1. Files created/modified, exact git diff, commit hash and any version/schema migrations.
-2. Exact tested commands + their stdout/pass/fail summary; never claim green without running them.
-3. New input and output artifact paths and a sample schema-valid JSON.
-4. Upstream SHA, data sample ID, checkpoint revision and operating mode (published example vs fresh inference).
-5. Which later phases are newly unblocked and which remain BLOCKED/PARTIAL.
-6. No API secrets, whole datasets, model weights or huge generated results in git.
+### Completion report required after **every phase**
 
-Use **one active implementation phase per Codex task/commit**. When a later phase wants to change a prior module, it must add/modify tests and preserve the explicit contract; do not duplicate data loading, science metrics, event schemas or reporting logic across stages.
+- Files added and changed; exact `git status`/diff summary, commit hash if committed.
+- Exact commands executed and actual pass/fail counts.
+- Source data and science provenance involved, plus environment/package versions.
+- Sample schema-valid artifact IDs/paths and whether derived from published or reexecuted model output.
+- Remaining blockers and explicit `DONE`, `PARTIAL`, or `BLOCKED` status.
+- Confirm secret values, model weights and raw datasets were not committed.
 
-**Stop conditions:** bad source provenance; reference-label leakage; misregistered lunar CRS; missing required source data; simulated agent events presented as real; unsupported scientific certainty; benchmark that compares unequal budgets. Surface these as failures and fix before demo.
+**No premature green checks:** running a mock provider doesn't prove an actual model API call; a published smoke sample doesn't prove fresh NASA inference; a unit-test synthetic array doesn't prove a scientific lunar result.
 
-## 7. Time and fallback priorities
+## 6. Integration release gates
 
-The hard stop is **2026-11-01 at 13:00 ET** (final slide deadline). Budget time for actual experiment runs and slide rehearsal rather than polishing the UI.
+- **G0 Setup:** reproducible app install; no committed secrets.
+- **G1 Scientific source:** authentic NASA-derived numeric raster; MOONATLAS validation and provenance.
+- **G2 Numeric truth:** at least one reproducible actual tool measurement.
+- **G3 Collective intelligence:** Microsoft Agent Framework specialist activity, independent event reactions and test requests; authentic event log.
+- **G4 Judge verification:** offline deterministic recomputation with tamper detection.
+- **G5 Reusability:** selectable validated real regions; two if obtained, otherwise labeled partial.
+- **G6 Evidence:** one matched-budget benchmark actually executed; no fake metrics or label leakage.
+- **G7 Demo:** Streamlit opens and displays real, verified results, export and replay.
 
-**Priority order:** verified input > one deterministic scientific calculation > working independent MAF agents and evidence exchange > verifiable report > one fair benchmark > Streamlit wrapper > multi-region expansion > full rerun of all NASA checkpoints.
+**Failure modes:** bad CRS, wrong raw-raster decoder, hidden reference leakage, invented scientific certainty, fabricated agent activity, model/secret exposure or an unmatched-budget comparison require a visible failing status and correction. Do not hide them behind a screenshot.
 
-If data availability is limited, say exactly which modalities/regions are covered and disable corresponding specialist tools. If model API access fails, offer validated deterministic results and **clearly labeled authentic saved-run replay**, but do not claim a fresh live swarm ran. If the 4-arm benchmark cannot be completed, publish the actually measured arms and list unfinished comparisons. Never show invented metrics.
+## 7. Schedule and scope cuts
 
-## 8. Source documentation
+**External deadline:** 2026-11-01 13:00 ET for final slides according to the competition page. Reserve sufficient time for scientific runs, presentation and backups.
 
-- ScienceClaw rules, judging, 13:00 Sunday deadline: https://scienceclawhack.ai/#competition
-- Codex local setup/AGENTS.md: https://github.com/openai/codex and https://developers.openai.com/cookbook/examples/codex/iterating-development-workflows-with-codex
-- NASA–IBM scientific checkpoint: https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model
-- MOONATLAS quickstart and sample validation: https://github.com/RRG1312/moonatlas-science
-- MOONATLAS v2 data contract: https://github.com/RRG1312/moonatlas-science/blob/main/docs/provenance/data-contract.md
-- Microsoft Agent Framework official Python concurrent/workflow samples: https://github.com/microsoft/agent-framework/tree/main/python/samples/03-workflows
-- Streamlit install: https://docs.streamlit.io/get-started/installation
+Priority if constrained: P0 → P1 → P2 → P4 → P5 → P7 → P8. Complete P3's label-firewall/frozen benchmark contract before P4 benchmark runs. P6's extra sectors are important for reuse but may be labeled partial if unavailable. Everything else is lower priority than an honestly verifiable scientific result.
 
-**Start now with Phase 0, then Phase 1. Do not ask Codex to implement all phases in one unreviewed turn.**
+**Deferred:** custom 3D Moon, arbitrary dataset upload, fine-tuning, Nebius H100 dependency, multi-cloud services, stand-alone API and a journal paper.
+
+## 8. Official implementation references
+
+- NASA–IBM model: https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model
+- MOONATLAS install/validation: https://github.com/RRG1312/moonatlas-science
+- MOONATLAS data contract: https://github.com/RRG1312/moonatlas-science/blob/main/docs/provenance/data-contract.md
+- Microsoft Agent Framework: https://github.com/microsoft/agent-framework
+- Current direct OpenAI Python provider: https://learn.microsoft.com/en-us/agent-framework/agents/providers/openai
+- Microsoft workflow/parallel samples: https://github.com/microsoft/agent-framework/tree/main/python/samples/03-workflows
+- Streamlit: https://docs.streamlit.io/
+- Competition: https://scienceclawhack.ai/#competition
+
+**First executable task:** P0 only. The next milestone may proceed only when the preceding required gates have actual passing tests.

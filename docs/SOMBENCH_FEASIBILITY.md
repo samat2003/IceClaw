@@ -1,4 +1,4 @@
-# SomBench ice-prospectivity data feasibility (P2 check; informs P6)
+# SomBench ice-prospectivity data feasibility (P2 check; informs P4)
 
 Purpose: decide how to obtain original **test-split observation arrays** so thermal/terrain
 specialists have real pixelwise inputs. Nothing here was downloaded except small text/JSON
@@ -29,7 +29,7 @@ files.
 **Splits [HF]:** test 25 patches (12 south, 13 north), validation 23 listed (README text says
 24), train 108. The README says "162 patches"; the file list holds 81 south + 81 north.
 
-South **test** patches (candidates for P6; one of them is already the published sector
+South **test** patches (candidates for P4; one of them is already the published sector
 `ice-s-0001-0002`):
 `patch_0001_0002_S_80S`, `patch_0003_0002_S_80S`, `patch_0005_0008_S_80S`,
 `patch_0007_0006_S_80S`, `patch_0000_0003_S_80S`, `patch_0003_0000_S_80S`,
@@ -64,16 +64,16 @@ inference code stages inputs only and never copies `PRO` **[repo]**).
 published sector is 256 × 256 at 238.56 m/px in polar stereographic **[repo, P1]**. MOONATLAS
 reads layers with `rasterio` and `.read()` yielding `(bands, H, W)`, treating no-data as
 non-finite; coverage is "every input layer finite" **[repo: `coverage`]**. TIFF no-data tags,
-exact dtypes and per-layer band counts must be read from the files in P6.
+exact dtypes and per-layer band counts must be read from the files in P4.
 
-**Discrepancies to resolve in P6 (do not assume either side):**
+**Discrepancies to resolve in P4 (do not assume either side):**
 1. README says "single-band GeoTIFF" and "11 layers / 1 782 files", but `band_statistics.json`
    lists `ASP_SIN_COS` with **two** bands and the file listing holds **10 layer names / 1 620 patch
    files**.
 2. README says validation = 24 patches; `val_filtered.txt` lists 23.
 3. `ONLYCOS` has band statistics under the key `COSASPECT` **[HF]**.
 
-## 3. Proposed IceClaw modality mapping (for P6, not implemented)
+## 3. Proposed IceClaw modality mapping (for P4, not implemented)
 
 | IceClaw layer name | SomBench file | Required unit check |
 | --- | --- | --- |
@@ -123,14 +123,9 @@ GPU generation is **not tested**. Per-patch inference time upstream is recorded 
 
 ## 6. Recommended next data decision
 
-1. **Cheapest, most informative first step (no model):** fetch the 8 input layers + `PRO` for the
-   12 south test patches (≈ 25 MB, no token) and open them with `rasterio` to settle shapes, band
-   counts, dtypes, no-data, CRS, and the unit questions in §2. This alone unblocks real
-   thermal/terrain tools and the fault-injection benchmark (Benchmark A needs genuine observation
-   packages, not predictions).
+1. **First priority (no checkpoint):** fetch the eight original input layers for **`patch_0001_0002_S_80S`**, which maps to the already verified published predicted sector `ice-s-0001-0002`, and open each GeoTIFF with `rasterio`. Resolve all band counts, dtypes, no-data masks, CRS and physical units. Verify pixel-center/affine/array alignment with the actual P1 prediction *before* enabling pixelwise thermal/geology claims. Only after this works, fetch the other south test observation packages (the previous ~25 MB estimate is metadata-derived, not an executed download).
+   `PRO` is an **evaluator-only target**: if downloaded, place it under an isolated evaluator root, never in agent-visible modalities, prompts, science tools or event logs.
 2. Only if checkpoint inference proves feasible on local hardware (≈ 6–15 GB download, pinned
    torch environment), produce predictions for the same patches for Benchmark B and the
    prediction auditor.
-3. If inference is infeasible, label those regions "observations only, no model prediction":
-   Benchmark A and the thermal/geology specialists still work; the prediction auditor and
-   Benchmark B cover only `ice-s-0001-0002`. Do not substitute fabricated predictions.
+3. If inference is infeasible, mark extra regions `observation_ready=True` and `prediction_ready=False`. They may be inspected, but are **not** complete user-selectable prospectivity investigations. The prediction auditor and model-reference-disagreement Benchmark B cover only `ice-s-0001-0002`. A physical-layer audit without a matching prediction is a separate, explicitly labeled task; do not claim full four-specialist operation or substitute fabricated model predictions.

@@ -1,7 +1,7 @@
 # IceClaw — Canonical Project Specification
 
 **Version:** 1.2 design freeze (2026-10-31)  
-**Status:** P0–P2 foundation, published-raster adapter, catalog and deterministic science tools have been implemented and committed. The P2 local test report states 94 passing tests; tests were not rerun as part of this document edit. Original pixelwise SomBench observation ingestion, fresh model inference, agent runs, UI and benchmark results have **not** been claimed.  
+**Status:** P0–P4 have been committed: validated upstream published prediction, catalog, deterministic science, sealed evaluation, and genuine same-tile SomBench TMAX/LPSR/SLOPE inputs. P5 has a **reported successful local live four-specialist run**, not yet committed, with real scientific follow-up but **no live challenge/revision or baseline superiority demonstrated**. P6 bundle verification, P7 four-arm comparison and P8 UI remain pending. No fresh NASA checkpoint inference or new lunar ice discovery is claimed. This document update did not rerun local tests.  
 **Repository:** https://github.com/samat2003/IceClaw  
 **Implementation roadmap:** [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
@@ -170,4 +170,4 @@ Hold fixed input cases, split, permitted tools, accessible modalities, total LLM
 - Main risk: one published smoke region with limited modalities is **not** enough for a real 4-specialist evaluation. Fetch test observations early; label support per region. If data access fails, preserve a smaller truthful demo and explicit limitations.
 - No fine-tuning, bespoke scientific model training, arbitrary Moon coverage or full research paper before core validation.
 
-**Build order and conflict-prevention policy:** See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), revision 3.0. The sequence is P3 sealed evaluation boundary → P4 original SomBench observations and exact prediction pairing → P5 Microsoft Agent Framework → P6 verified reports → P7 benchmark → P8 UI. This spec is the single immutable acceptance contract until a documented, approved version change.
+**Build order and conflict-prevention policy:** See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), revision 3.1. P3 evaluator sealing and P4 exact source-observation pairing are implemented and committed; P5 agent execution was reported live but remains local pending commit. The next phase is P6 verified reports; then a minimal P8 UI may precede large P7 comparative experiments to protect the live demo. P7's complete four-arm comparison must use a genuinely paired scenario, not silently treat observation-only tiles as model-prediction cases. This spec is the single immutable acceptance contract until a documented, approved version change.

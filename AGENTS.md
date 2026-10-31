@@ -21,4 +21,4 @@ Engineering invariants:
 
 Existing planning docs `docs/SCIENTIFIC_PROTOCOL.md` and `docs/DEMO_2MIN.md` are supplementary and may reflect older assumptions.
 
-**Current implementation status:** P0–P2 are committed. **Next phase: P3** (sealed evaluator and benchmark firewall), followed by **P4** (authentic same-tile SomBench input ingestion), **P5** (Microsoft Agent Framework collective), **P6** (reports/verification), **P7** (benchmarks) and **P8** (Streamlit). See implementation plan v3.0. Complete and test one phase at a time; never redo committed phases without an actual regression.
+**Current implementation status:** P0–P4 committed; P5 reported complete locally but UNCOMMITTED after 215 passing tests and one genuine live four-specialist run. **Next: review/commit P5, then implement P6** (source-portable verification bundle and bounded event digest). After P6, prioritize the minimal working P8 Streamlit demonstration; P7 then measures carefully budgeted benchmarks on eligible paired scenarios. The source of truth is implementation plan v3.1. Do not redo committed phases or bypass the evaluation firewall.

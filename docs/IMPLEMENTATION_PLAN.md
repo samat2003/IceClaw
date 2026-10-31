@@ -1,7 +1,7 @@
 # IceClaw — Engineering Implementation Plan
 
-**Revision:** 3.0 · 2026-10-31  
-**Status:** P0–P2 implemented and committed; P3–P8 pending. The reported local P2 suite has 94 passing tests; results have not been rerun by this document update.  
+**Revision:** 3.1 · 2026-10-31  
+**Status:** P0–P4 implemented and committed; P5 reported COMPLETE locally but UNCOMMITTED (215 tests passed, one default live-test skip; one genuine live MAF run). P6–P8 pending. This documentation edit does not independently run the uncommitted P5 code.  
 **Product and scientific authority:** [PROJECT_SPEC.md](PROJECT_SPEC.md).  
 **Real-data feasibility:** [SOMBENCH_FEASIBILITY.md](SOMBENCH_FEASIBILITY.md).  
 **Existing validated upstream artifact:** [UPSTREAM_MOONATLAS.md](UPSTREAM_MOONATLAS.md).
@@ -14,7 +14,10 @@ This is a **software engineering specification**, independent of the editor, ter
 | --- | --- | --- | --- |
 | **P0 — Core package and contracts** | DONE (committed) | `pyproject.toml`, `config.py`, `contracts.py`, `cli.py`, foundational tests | Pydantic models, CLI placeholders, redacted settings |
 | **P1 — Genuine MOONATLAS artifact** | DONE (committed) | `data/moonatlas_adapter.py`, adapter tests and upstream validation documentation | Pinned upstream commit `945fb5196679cf6927354c53be624d745083f9e9`; published sector `ice-s-0001-0002`; raw numeric prediction; validated geolocation, statistics, checksums |
-| **P2 — Catalog and science tools** | DONE (committed) | `data/catalog.py`, `data/validation.py`, `science/`, `services.py`, catalog/science tests | 10 deterministic tools, `ToolMeasurement`, reproducible tool IDs, `list-regions`, 94 tests reported passed |
+| **P2 — Catalog and science tools** | DONE (committed) | `data/catalog.py`, `data/validation.py`, `science/`, `services.py`, catalog/science tests | 10 deterministic tools, `ToolMeasurement`, reproducible tool IDs, `list-regions`; 94 tests reported passed at P2 |
+| **P3 — Evaluation isolation** | DONE (committed) | `evaluation/{fixtures,faults,baselines,score}.py`, `docs/EVALUATION_PROTOCOL.md` | Sealed, reproducible prediction-only suite; evaluator truth isolated; preliminary baseline |
+| **P4 — Real original observation pairing** | DONE (committed) | `data/sombench_adapter.py`, observation catalog, multimodal evaluation | One prediction+TMAX/LPSR/SLOPE fully paired; 11 observation-only tiles; 160 tests reported passed at P4 |
+| **P5 — Genuine agent runtime** | REPORTED DONE; LOCAL / NOT COMMITTED | `agents/`, `swarm/`, `docs/AGENT_RUNTIME.md` | One authentic four-specialist run, 22 model calls / 15 scientific tools / 24 events; cross-agent follow-up with no warranted challenge; tests reported passed; code not independently inspected here |
 
 **P2 input limitations, confirmed by the implementation:** The smoke sector is **partial**: 256×256 decoded model predictions at **238.56 m/pixel**, plus a *tile scalar* PSR fraction and *single-anchor* slope, temperature and shadow metadata. **It has no pixelwise thermal/shadow/slope rasters**. Current thermal and geological tools correctly return `UNAVAILABLE_MODALITY`. Do not treat one anchor as 65,536 observations.
 
@@ -127,6 +130,8 @@ iceclaw.evaluation (hidden answers, fault key, scoring)
 
 ### P5 — Genuine Microsoft Agent Framework specialist collective
 
+**Implementation status:** Reported completed locally but NOT YET COMMITTED. The live run is evidence of authentic cross-agent follow-up, not a live challenge→revision or an improvement over a baseline. Preserve the captured authentic event log and model usage. No reason to force a scientifically unwarranted challenge.
+
 **Prerequisites:** P3 **and P4 mandatory same-tile data gate**.  
 **Owns:** `src/iceclaw/{agents,swarm}/`, agent integration tests. No UI, no benchmark scoring.
 
@@ -137,7 +142,7 @@ iceclaw.evaluation (hidden answers, fault key, scoring)
 5. Offline tests with stubbed model replies check actual MAF function-tool routing, event linkage, distinct agent IDs, budget ceilings, secrecy of evaluation root and deterministic source/tool records. Mark live API tests separately; a mock does **not** prove live API operation.
 6. Execute one genuine OpenAI-backed run on the now multimodal paired tile, with real cited numeric measurements and saved original interactions. Distinguish previous hypotheses from later evidence-based revisions; never fabricate a debate if agents agree.
 
-**Acceptance:** a real source-backed live four-specialist investigation, at least one observed cross-agent evidence-triggered follow-up where scientifically warranted, and a machine-verifiable event history. If no challenge occurs naturally, it remains an honest unresolved/no-conflict result, not a contrived success. All fast tests and Ruff pass.
+**Acceptance:** a real source-backed live four-specialist investigation, at least one observed cross-agent evidence-triggered follow-up where scientifically warranted, and a machine-verifiable event history. If no challenge occurs naturally, it remains an honest unresolved/no-conflict result, not a contrived success. All fast tests and Ruff pass. **Reported P5 evidence:** authentic Skeptic follow-up based on Prediction Auditor's peak, 22 model calls, ~91k tokens; no observed live challenge or revision. Treat the live trace as evidence-sharing, not measured superiority. The recorded SQLite/JSONL run remains the source of truth.
 
 ### P6 — Shared investigation service, saved report and offline verifier
 
@@ -145,28 +150,31 @@ iceclaw.evaluation (hidden answers, fault key, scoring)
 **Owns:** `src/iceclaw/services.py`, `src/iceclaw/reports/{export,verify}.py`, CLI implementations and tests. Do not duplicate scientific calculations.
 
 1. Create `InvestigationService`: validated region input, `RunBudget`, live/replay mode and unique run ID; use the same service from CLI and UI.
-2. Write exactly `runs/<id>/{input_manifest.json,events.jsonl,evidence.json,report.md,rankings.csv,verification.json}`, optional georeferenced plot exports. Include actual source checksums, model checkpoint source mode, original pixelwise inputs, source SHA, code revision, model version, tool params/units and uncertainty.
+2. Write exactly `runs/<id>/{input_manifest.json,events.jsonl,evidence.json,report.md,rankings.csv,verification.json}`, optional plots and a **minimal permitted source-input snapshot** for independent recomputation. Include actual source checksums, model checkpoint source mode, original pixelwise inputs, source SHA, code revision, model version, tool params/units and uncertainty. The prior P5 SQLite tool/event history must be exported **without reconstructing or inventing activity**. Preserve P5's recorded live run as an authentic replay fixture; it may be incomplete until P6 exports the full contract.
+   **Portability gate:** A bundle advertised as *offline portable* must contain the exact non-evaluator source arrays needed by its deterministic tools, with original source SHA and license attribution, or explicitly identify and verify a separately supplied content-addressed source package. Otherwise label verification as *requires local source data* instead of falsely claiming that an isolated downloaded ZIP can recompute its numbers. Never bundle `PRO`, fault labels, `.env` or absolute credential-bearing paths.
 3. Scientific report sections: question, available inputs, observed numeric measurements, model-prediction inconsistencies, alternative explanations, outstanding uncertainties, and **research follow-up priority** (NOT physical ice probability). For mixed-unit dictionaries preserve correct per-field unit labels or produce separate scalar evidence.
 4. Offline `verify --run ID` recomputes real deterministic tool measurements from exact source files within declared per-tool tolerances. Detect tampered sources, inconsistent grid/units, missing event parents and mismatch between cited measurement and recorded result.
 5. Authentic replay reads the saved events only, always displays `recorded`, and makes no new agent calls.
+6. **Token/cost hardening before benchmark:** P5's first live run consumed ~91,049 tokens across 22 model calls and 24 events, with growing Skeptic context. Implement a deterministic bounded evidence digest for new prompts (recent relevant event IDs + cited compact tool values, retaining full history in SQLite), max prompt tokens/calls per investigation and model-usage accounting from actual provider responses. No fabricated token price: cost remains `unpriced` until an independently verified model rate is configured. Test that bounded context does not drop required source IDs/parent references. Preserve the prior full P5 trace unchanged.
 
-**Acceptance:** live generated bundle passes offline verifier; tampered source/metadata or fabricated event parent fails and returns nonzero exit. CLI `investigate`/`verify` both call `InvestigationService`.
+**Acceptance:** live generated bundle passes offline verifier; tampered source/metadata or fabricated event parent fails and returns nonzero exit. CLI `investigate`/`verify` both call `InvestigationService`. A second independent Python process (no LLM key, no GPU) can verify using the declared source package. Prompt growth and per-run token usage are bounded and recorded.
 
 ### P7 — Comparative scientific benchmark on frozen cases
 
 **Prerequisites:** P3, P4, P5 and P6.  
-**Owns:** `src/iceclaw/evaluation/{runner,score}.py`, benchmark tests and actual result artifacts.
+**Owns:** a thin **composition runner outside `iceclaw.evaluation`** (e.g., `src/iceclaw/benchmark.py`) plus `iceclaw.evaluation.score`, benchmark tests and actual result artifacts. **Do not break P3's AST/import firewall:** evaluator code cannot import `agents` or `swarm`; the composition runner can invoke an agent via `services` and pass only a public `AgentScenario`, then submit frozen outputs to the evaluator's scoring functions.
 
-1. On the frozen hidden-case suite (prediction-only v1 and multimodal v2) run four systems on exactly the same permissible evidence and declared total budgets: deterministic rule baseline, one agent with all authorized tools, four specialists **without** inter-agent messages, and four communicating specialists.
-2. Keep identical test cases, total model/tool budget, source version, scientific tool set, reference access restrictions and measured runtime. Do **not** allocate each of four agents the same full budget granted to a single agent.
-3. Freeze each system's detection flags/prioritized region list and original run logs **before** evaluator-only access to fault truth or `PRO` reference. For synthetic faults compute case-level precision, recall, F1, clean false-positive rate. For untouched source cases compute residual-disagreement top-K recovery, explicitly stating this is not physical ice ground truth.
-4. Export CSV/JSON evidence for all case-level counts, costs and caveats. Use repeated cases/seeds if feasible; small geographic samples preclude broad statistical claims. Report a lack of benefit or regression honestly.
+1. **Resolve scenario eligibility before any four-arm comparison.** The P3 prediction-only cases carry no pixelwise TMAX/LPSR/SLOPE, and 11 of P4's 12 multimodal cases have observations but no verified NASA prediction. These are useful for *component/tool robustness*, not a full-four-specialist end-to-end benchmark. Create and freeze a NEW, clearly versioned **paired-tile case suite** using copies of the one verified predicted+observed tile, with clean controls and independently declared faults. The production runtime currently accepts only paired catalog regions; provide a dedicated, strictly allowlisted **scenario execution adapter** that supplies a sealed case's `AgentRegionContext` and `RegionArrays` without bypassing the source/input firewall. Never hand an agent a catalog record, evaluator reference, hidden labels or arbitrary file paths. Ensure a new isolated run, conversation and tool state for every opaque case ID, with no cross-case context memory.
+2. Run four systems on exactly the **same eligible case suite** and declared total budgets: deterministic rule baseline, one agent with all authorized tools, four specialists **without** inter-agent messages, and four communicating specialists. P3 prediction-only and P4 observation-only suite scores may also be reported as **separate, limited ablations**; do not conflate these with a full four-specialist comparison.
+3. Keep identical test cases, total model/tool budget, source version, scientific tool set, reference access restrictions and measured runtime. Do **not** allocate each of four agents the same full budget granted to a single agent. Before committing to a full suite, run **one paid case per LLM arm** as a cost/latency feasibility pilot, then lock the affordable number of cases and budgets. Current swarm consumption of ~91k tokens / 22 calls per live investigation would imply ~1.09M tokens and 264 model calls across 12 comparable full-swarm cases alone if unchanged; do not assume an unverified dollar price. Prefer fewer honest matched cases to an unbounded or unequal-budget comparison.
+4. Freeze each system's detection flags/prioritized region list and original run logs **before** evaluator-only access to fault truth or `PRO` reference. For synthetic faults compute case-level precision, recall, F1, clean false-positive rate. For untouched source cases compute residual-disagreement top-K recovery, explicitly stating this is not physical ice ground truth. `ObsBaselineConfigV2` was defined after identifying the v1 clean-noise false positive; a new suite/config must be locked in advance, and its result must **not** be advertised as independent confirmation of a threshold chosen from prior failed controls.
+5. Export CSV/JSON evidence for all case-level counts, costs and caveats. Use repeated cases/seeds if feasible; small geographic samples preclude broad statistical claims. Report a lack of benefit or regression honestly. One paired source tile and derived fault copies do **not** establish performance generalization to the Moon; do not infer statistical independence from the number of synthetic cases.
 
 **Acceptance:** at least one real measured matched-budget comparison with reproducible scoring code and all individual case outcomes. Never use invented benchmark scores, artificial model replies or mock-agent outputs in the submitted comparison.
 
 ### P8 — Minimal Streamlit workbench and final demo
 
-**Prerequisites:** P6; incorporate actual P7 results if completed.  
+**Prerequisites:** P6; incorporate actual P7 results if completed. **Scheduling note:** to protect the judged live demo, build the smallest functional P8 Streamlit page **immediately after P6** and BEFORE launching a large paid P7 benchmark if time is tight. Later add benchmark results to the existing page without changing the source/service path.  
 **Owns:** `app.py` and UI tests/presentation docs.
 
 1. Single page: validated region selector, status/coverage and modality badges; Plotly heatmap from georeferenced raw model raster; start live investigation; authentic events and report; Verify/Recompute button; download saved bundle.
@@ -213,7 +221,8 @@ Do not mistake `--scope published` for a fresh NASA checkpoint inference test.
 
 | Gate | Required evidence |
 | --- | --- |
-| **G0 P0–P2 (DONE reported)** | Existing 94 fast tests, catalog, real decoded source and P2 scientific tools |
+| **G0 P0–P4 (DONE committed)** | P0/P1 real source, 94 P2 tests reported, sealed P3 suite, paired P4 TMAX/LPSR/SLOPE, 160 P4 tests reported |
+| **G0b P5 (DONE reported / uncommitted)** | 215 tests reported passed, 1 opt-in skip; four genuine MAF specialist agents; 22 live model calls and cross-agent follow-up (no live revision) |
 | **G1 P3** | Prediction-only sealed benchmark case suite; privacy/firewall regression tests |
 | **G2 P4** | Authentic, spatially aligned TMAX/LPSR/SLOPE TIFFs from matched tile; test on pixelwise data; second region target |
 | **G3 P5** | Real Microsoft Agent Framework event trace and valid agent tool executions |
@@ -229,7 +238,7 @@ For each phase record: exact changed modules, commands actually executed and tes
 
 **Final submission deadline:** Sunday Nov. 1, 2026 at 1 PM Eastern per competition site; allocate work to actual measured science and live evidence, not UI cosmetics.
 
-**Non-skippable dependency chain:** **P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7 → P8**. P7 and P8 may proceed in parallel after P6 only when one real verifiable run exists. Model checkpoint reruns and extra tiles in P4 are optional **after** the first genuine multimodal paired tile; do not download ~GB weights before confirming the small original observation inputs work.
+**Non-skippable engineering dependencies:** **P0 → P1 → P2 → P3 → P4 → P5 → P6**, then **P8 minimal live/replay UI** and **P7 evaluation** can proceed in either order or parallel. Finish a working P8 demonstration before committing to a costly P7 suite if time is short. P7 can attach measured results to P8 afterward. Model checkpoint reruns and extra predicted tiles remain optional, with honest one-paired-region coverage if unfinished.
 
 **If P4 cannot pair one real prediction with real observation arrays**, the full four-specialist scientific claim is **BLOCKED**. Do not replace thermal/geology with invented arrays. A prediction-only audit may still be implemented, but the report and demo must explicitly say the thermal/geological hypotheses lack pixelwise testing.
 
@@ -246,4 +255,4 @@ For each phase record: exact changed modules, commands actually executed and tes
 - Streamlit: https://docs.streamlit.io/
 - ScienceClaw: https://scienceclawhack.ai/#competition
 
-**Next engineering milestone is P3. Then P4 must acquire and correctly pair real physical observations before developing the agent collective.**
+**Next engineering milestone: commit the reported P5 implementation after staged-diff review, then implement P6. Immediately after P6, ensure a minimal P8 judge-facing UI works before investing heavily in P7 model calls.**

@@ -3,7 +3,7 @@
 **Decentralized AI planetary scientists for auditing lunar polar ice-prospectivity predictions**  
 ScienceClaw 2026 · [Project source](https://github.com/samat2003/IceClaw)
 
-**Project status:** Engineering specification and development sequence are committed. The scientific application, NASA checkpoint execution, live scientific agent collective, Streamlit interface and benchmark results **have not yet been implemented or run**.
+**Project status (2026-10-31):** P0–P2 implemented and committed: Python core/contracts, validated real MOONATLAS numeric source, repeatable scientific tools, and region catalog. The reported local suite has **94 passing tests**; this README update did not rerun them. **P3–P8 remain pending.** No fresh NASA inference, live scientific swarm, app interface or measured benchmark is claimed.
 
 ## What it will do
 
@@ -14,7 +14,7 @@ A researcher selects a *verified, covered* lunar south-polar tile. Four independ
 ## Canonical project documents
 
 1. **[Project specification](docs/PROJECT_SPEC.md)** — scientific objective, technology stack, data contracts, user experience, evidence standard, safety and evaluation semantics.
-2. **[Engineering implementation plan](docs/IMPLEMENTATION_PLAN.md)** — ordered phases P0–P8, exact modules, dependencies, test commands, entry/exit gates, and fallback conditions. **This is tool-independent software work, not instructions for a particular coding assistant.**
+2. **[Engineering implementation plan (revision 3.0)](docs/IMPLEMENTATION_PLAN.md)** — P0–P2 completed; P3 sealed evaluator; **P4 real SomBench thermal/PSR/slope data pairing before P5 agents**; P6 verifiable reports; P7 measured benchmark; P8 minimal Streamlit UI. **This is tool-independent software work, not instructions for a particular coding assistant.**
 3. [Repository implementation guidance](AGENTS.md) — short durable project rules. [CLAUDE.md](CLAUDE.md) references these same rules without duplicating or changing the engineering plan.
 
 The older [scientific protocol](docs/SCIENTIFIC_PROTOCOL.md) and [two-minute presentation draft](docs/DEMO_2MIN.md) are supplementary historic notes. In a conflict, prefer the project specification and current engineering plan.
@@ -36,7 +36,7 @@ The original IceClaw code is the selectable-region research workbench, independe
 - **MOONATLAS/NASA inference** in a separate pinned scientific environment; the application consumes validated output artifacts
 - **Live agent configuration:** `OPENAI_API_KEY`, `ICECLAW_LLM_MODEL`, and `ICECLAW_LLM_PROVIDER=openai` from local environment; NEVER committed
 
-The planned UI allows a user to choose any scientifically covered region in the local catalog, run a new investigation, inspect source-backed claims and alternate explanations, verify a deterministic calculation, and download a research bundle. No assertion of global lunar coverage.
+The planned UI allows a user to choose a region with **both** verified original scientific observations and a spatially paired model prediction, run a new investigation, inspect source-backed claims and alternatives, verify a deterministic calculation, and download a research bundle. Observation-only records may be inspected but are not complete prospectivity investigations. No assertion of global lunar coverage.
 
 ## Local WSL start
 
@@ -51,13 +51,13 @@ git pull --ff-only origin main
 
 **Note:** This repository now tracks `.gitignore`, `CLAUDE.md`, `AGENTS.md`, and `.env.example`. If you already created one of these locally but it is *untracked*, Git may refuse to pull because it would overwrite it. **Move the local copy to a backup outside the repository first; never delete or overwrite `.env`.** After pulling, compare the backup with the tracked version. See the next step below.
 
-Open `docs/IMPLEMENTATION_PLAN.md` and implement **P0** first. P0 creates the installable Python package and test suite. **Do not assume `python -m iceclaw.cli` or `streamlit run app.py` exist before the relevant phases have been implemented.**
+Open `docs/IMPLEMENTATION_PLAN.md`. **P0, P1 and P2 have been implemented and committed; the next phase is P3.** Do not redo the initial package or adapter. Run existing unit tests before changes. **The benchmark, agents, verification and Streamlit UI do not yet exist**; check their phase gates rather than calling them prematurely.
 
 Local `.env` may already hold an OpenAI key. Leave it untouched. `.env.example` contains only placeholder variable names, and `.gitignore` excludes `.env`, data, virtual environments, local research runs, model weights and local settings.
 
 ## First scientific reproducibility gate
 
-The published MOONATLAS sample includes a south-polar sample identified as `ice-s-0001-0002`. It is a **published example, not a fresh IceClaw inference**. After P0, P1 independently validates the example using the upstream MOONATLAS checkout:
+The published MOONATLAS sample includes a south-polar sample identified as `ice-s-0001-0002`. It is a **published example, not a fresh IceClaw inference**. P1 has validated this real upstream example. The relevant reproduction commands in the upstream MOONATLAS checkout are:
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -65,7 +65,7 @@ python -m pytest -q
 moonatlas-science validate --root examples/science-smoke --scope published
 ```
 
-Those commands must be run **within the upstream MOONATLAS scientific environment**, not in the application root. Actual input modalities may be absent from the published example and must never be invented; obtain official original SomBench arrays before claiming full thermal/geology analysis.
+Those commands must be run **within the upstream MOONATLAS scientific environment**, not in the application root. P2 identified **no pixelwise thermal/PSR/slope arrays** in the smoke fixture. **P4** will ingest the pinned original SomBench observation GeoTIFFs for the exact P1 patch and verify their alignment before full thermal/geology analyses or four-specialist scientific claims. Original targets (`PRO`) remain evaluator-only.
 
 ## Verification and evaluation goals
 

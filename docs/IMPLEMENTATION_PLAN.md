@@ -333,7 +333,7 @@ python -m streamlit run app.py
 
 **External deadline:** 2026-11-01 13:00 ET for final slides according to the competition page. Reserve sufficient time for scientific runs, presentation and backups.
 
-Priority if constrained: P0 → P1 → P2 → P4 → P5 → P7 → P8. Complete P3's label-firewall/frozen benchmark contract before P4 benchmark runs. P6's extra sectors are important for reuse but may be labeled partial if unavailable. Everything else is lower priority than an honestly verifiable scientific result.
+Priority if constrained: **P0 → P1 → P2 → P3 → P4 → P5 → P7 → P8**. Phase **P3 is a mandatory prerequisite** to P4 so private reference labels cannot leak into agent execution. Phase P6's additional verified sectors may be completed after P5 or in parallel with P7, but remain explicitly partial if unavailable. Everything else is lower priority than an honestly verifiable scientific result.
 
 **Deferred:** custom 3D Moon, arbitrary dataset upload, fine-tuning, Nebius H100 dependency, multi-cloud services, stand-alone API and a journal paper.
 

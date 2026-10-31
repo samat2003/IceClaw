@@ -55,4 +55,8 @@ Covered-pixel count must match exactly.
 ## Contract notes
 
 No change to the canonical contracts was needed. The adapter returns its own `SectorSource`;
-mapping it into `RegionCatalogEntry` (affine, footprint, modality metadata) is P2.
+`data/catalog.py` (P2) maps it into `RegionCatalogEntry`: `footprint` is `(latitude, longitude)`
+for the NW, NE, SE, SW outer pixel corners; `affine` is GDAL order; `prediction_checkpoint_id` is
+`<filename>@sha256:<upstream-published sha>` (not verified against a local download). Only
+pixelwise layers appear in `modalities`, so the published example has readiness `partial`.
+See `docs/SOMBENCH_FEASIBILITY.md` for acquiring real input layers.

@@ -15,7 +15,6 @@ def test_help_lists_commands(capsys):
 @pytest.mark.parametrize(
     "argv",
     [
-        ["list-regions"],
         ["investigate", "--region", "r"],
         ["verify", "--run", "x"],
         ["benchmark", "--config", "c.json"],

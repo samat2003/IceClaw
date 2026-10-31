@@ -160,7 +160,8 @@ def verify_checksum(root: Path, relpath: str, expected: str) -> str:
     actual = sha256_file(path)
     if actual != expected:
         raise SourceError(
-            "CHECKSUM_MISMATCH", f"{relpath}: sha256 {actual[:12]}... != expected {expected[:12]}..."
+            "CHECKSUM_MISMATCH",
+            f"{relpath}: sha256 {actual[:12]}... != expected {expected[:12]}...",
         )
     return actual
 
@@ -264,15 +265,20 @@ def load_sector(root: str | Path, sector_id: str = DEFAULT_SECTOR_ID) -> SectorS
     )
     if model is None:
         raise SourceError("MALFORMED_METADATA", "no lfm-ice-prospectivity model in manifest")
-    if (
-        model.get("checkpoint") != prov.get("checkpoint")
-        or model.get("revision") != prov.get("modelRevision")
+    if model.get("checkpoint") != prov.get("checkpoint") or model.get("revision") != prov.get(
+        "modelRevision"
     ):
-        raise SourceError("PROVENANCE_MISMATCH", "sector checkpoint/revision != processing manifest")
+        raise SourceError(
+            "PROVENANCE_MISMATCH", "sector checkpoint/revision != processing manifest"
+        )
     if prov.get("processingVersion") != processing.get("processingVersion"):
         raise SourceError("PROVENANCE_MISMATCH", "processingVersion differs from manifest")
     dataset = next(
-        (d for d in processing.get("datasets", []) if d.get("sourceId") == prov.get("sourceDataset")),
+        (
+            d
+            for d in processing.get("datasets", [])
+            if d.get("sourceId") == prov.get("sourceDataset")
+        ),
         None,
     )
     if dataset is None:
@@ -282,7 +288,12 @@ def load_sector(root: str | Path, sector_id: str = DEFAULT_SECTOR_ID) -> SectorS
     try:
         corners = tuple(
             (float(fg[r][c]["latitude"]), float(fg[r][c]["longitude"]))
-            for r, c in ((0, 0), (0, len(fg[0]) - 1), (len(fg) - 1, len(fg[0]) - 1), (len(fg) - 1, 0))
+            for r, c in (
+                (0, 0),
+                (0, len(fg[0]) - 1),
+                (len(fg) - 1, len(fg[0]) - 1),
+                (len(fg) - 1, 0),
+            )
         )
     except (KeyError, IndexError, TypeError) as e:
         raise SourceError("MALFORMED_METADATA", f"footprintGrid unreadable: {e}") from e
@@ -359,9 +370,7 @@ def decode_rgba(
             "SHAPE_MISMATCH", f"raster is {rgba.shape[:2]}, metadata says {expected_shape}"
         )
     levels = rgba[..., 0].astype(np.float64) * 256 + rgba[..., 1]
-    covered = (
-        rgba[..., 3] == 255 if rgba.shape[2] == 4 else np.ones(rgba.shape[:2], dtype=bool)
-    )
+    covered = rgba[..., 3] == 255 if rgba.shape[2] == 4 else np.ones(rgba.shape[:2], dtype=bool)
     values = float(encoding["offset"]) + float(encoding["scale"]) * levels
     return DecodedPrediction(values=values, covered=covered)
 
@@ -393,7 +402,13 @@ def compare_to_upstream(src: SectorSource, summary: dict[str, float | int]) -> C
     tol = src.stats_tolerance
     for k in ("min", "max", "mean", "p90"):
         rep.items.append(
-            Discrepancy(k, float(summary[k]), src.upstream_stats[k], abs(summary[k] - src.upstream_stats[k]), tol)
+            Discrepancy(
+                k,
+                float(summary[k]),
+                src.upstream_stats[k],
+                abs(summary[k] - src.upstream_stats[k]),
+                tol,
+            )
         )
     rep.items.append(
         Discrepancy(
@@ -422,16 +437,26 @@ def verify_peak_and_geometry(src: SectorSource, pred: DecodedPrediction) -> list
     if (int(arg_row), int(arg_col)) != (row, col):
         problems.append(f"argmax ({arg_row},{arg_col}) != rawPeak ({row},{col})")
     lat, lon = pixel_to_lat_lon(src.projection, src.grid, col + 0.5, row + 0.5)
-    if abs(lat - p["latitude"]) > GEOLOCATION_TOLERANCE_DEG or lon_diff(lon, p["longitude"]) > GEOLOCATION_TOLERANCE_DEG:
-        problems.append(f"rawPeak pixel centre -> ({lat:.6f},{lon:.6f}) != ({p['latitude']},{p['longitude']})")
+    if (
+        abs(lat - p["latitude"]) > GEOLOCATION_TOLERANCE_DEG
+        or lon_diff(lon, p["longitude"]) > GEOLOCATION_TOLERANCE_DEG
+    ):
+        problems.append(
+            f"rawPeak pixel centre -> ({lat:.6f},{lon:.6f}) != ({p['latitude']},{p['longitude']})"
+        )
     # Footprint corners are the outer corners of the pixel grid.
     w, h = src.width, src.height
     for (clat, clon), (c, r) in zip(
         src.footprint_corners_lat_lon, ((0, 0), (w, 0), (w, h), (0, h)), strict=True
     ):
         lat, lon = pixel_to_lat_lon(src.projection, src.grid, c, r)
-        if abs(lat - clat) > GEOLOCATION_TOLERANCE_DEG or lon_diff(lon, clon) > GEOLOCATION_TOLERANCE_DEG:
-            problems.append(f"footprint corner ({c},{r}) -> ({lat:.6f},{lon:.6f}) != ({clat},{clon})")
+        if (
+            abs(lat - clat) > GEOLOCATION_TOLERANCE_DEG
+            or lon_diff(lon, clon) > GEOLOCATION_TOLERANCE_DEG
+        ):
+            problems.append(
+                f"footprint corner ({c},{r}) -> ({lat:.6f},{lon:.6f}) != ({clat},{clon})"
+            )
     return problems
 
 
@@ -447,13 +472,19 @@ def describe_modalities(src: SectorSource) -> list[ModalityAvailability]:
             "nasa_ibm_prediction_raw",
             "pixelwise",
             unit="prospectivity index (dimensionless; not a probability or ice abundance)",
-            note=f"{src.width}x{src.height} @ {src.pixel_size_m} m/px; raw values may lie outside [0,1]",
+            note=(
+                f"{src.width}x{src.height} @ {src.pixel_size_m} m/px; "
+                "raw values may lie outside [0,1]"
+            ),
         )
     ]
     if src.psr_fraction is not None:
         out.append(
             ModalityAvailability(
-                "psr_fraction", "tile_scalar", unit="fraction", value=src.psr_fraction,
+                "psr_fraction",
+                "tile_scalar",
+                unit="fraction",
+                value=src.psr_fraction,
                 note="whole-tile scalar from upstream metadata; no spatial PSR mask",
             )
         )
@@ -462,14 +493,18 @@ def describe_modalities(src: SectorSource) -> list[ModalityAvailability]:
         if key in src.at_anchor:
             out.append(
                 ModalityAvailability(
-                    f"anchor_{key}", "single_anchor_point", unit=unit, value=src.at_anchor[key],
+                    f"anchor_{key}",
+                    "single_anchor_point",
+                    unit=unit,
+                    value=src.at_anchor[key],
                     note="single-anchor metadata, not a spatial field",
                 )
             )
     for name in ("pixelwise_temperature", "pixelwise_shadow_mask", "pixelwise_terrain"):
         out.append(
             ModalityAvailability(
-                name, "unavailable",
+                name,
+                "unavailable",
                 note="UNAVAILABLE_MODALITY: not included in the published example; real layer "
                 "names/shapes must be discovered from pinned SomBench config (P6)",
             )

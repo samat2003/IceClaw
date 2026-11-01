@@ -1,4 +1,4 @@
-# MOONATLAS upstream acquisition notes (P1)
+# MOONATLAS published prediction: provenance and validation
 
 IceClaw reads a MOONATLAS export as **read-only validated data**. MOONATLAS runs in its own
 environment so its dependencies never enter the IceClaw/Streamlit/agent environment.
@@ -54,9 +54,9 @@ Covered-pixel count must match exactly.
 
 ## Contract notes
 
-No change to the canonical contracts was needed. The adapter returns its own `SectorSource`;
-`data/catalog.py` (P2) maps it into `RegionCatalogEntry`: `footprint` is `(latitude, longitude)`
+The adapter uses the existing project data contracts. The adapter returns its own `SectorSource`;
+`data/catalog.py` maps it into `RegionCatalogEntry`: `footprint` is `(latitude, longitude)`
 for the NW, NE, SE, SW outer pixel corners; `affine` is GDAL order; `prediction_checkpoint_id` is
 `<filename>@sha256:<upstream-published sha>` (not verified against a local download). Only
 pixelwise layers appear in `modalities`, so the published example has readiness `partial`.
-See `docs/SOMBENCH_FEASIBILITY.md` for acquiring real input layers.
+See [SomBench ingestion and pairing](SOMBENCH_INGESTION.md) for the verified real input layers, established units and reproducible spatial alignment.

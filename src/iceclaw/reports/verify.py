@@ -154,7 +154,11 @@ def resolve_source(
     if source_package is not None:
         rep.mode = MODE_EXTERNAL
         return Path(source_package), None
-    embedded = b / manifest["source_package"]["embedded_path"]
+    try:
+        embedded = pkg.contained_path(b, manifest["source_package"]["embedded_path"])
+    except pkg.PackageError as e:
+        rep.add("source_package_integrity", False, str(e))
+        return None, None
     if (embedded / pkg.MANIFEST_NAME).is_file():
         rep.mode = MODE_EMBEDDED
         return embedded, None
@@ -223,6 +227,12 @@ def _verify(
 ):
     # 1. structure --------------------------------------------------------------------
     required = [*ex.CONTRACT_FILES, "llm_calls.jsonl"]
+    try:
+        for name in required:
+            pkg.contained_path(b, name)
+    except pkg.PackageError as e:
+        rep.add("files_present", False, str(e))
+        return rep
     missing = [f for f in required if not (b / f).is_file()]
     if not rep.add(
         "files_present", not missing, f"missing: {missing}" if missing else f"{len(required)} files"
@@ -231,6 +241,11 @@ def _verify(
     try:
         manifest = _read_json(b / "input_manifest.json")
         InputManifest.model_validate({k: manifest[k] for k in InputManifest.model_fields})
+        if not isinstance(manifest.get("integrity"), dict):
+            raise ValueError("integrity must be an object")
+        if not isinstance(manifest.get("source_package"), dict):
+            raise ValueError("source_package must be an object")
+        pkg.contained_path(b, manifest["source_package"]["embedded_path"])
         ok_fmt = manifest.get("bundle_format") in ex.SUPPORTED_BUNDLE_FORMATS
         rep.add(
             "manifest_schema",
@@ -239,7 +254,7 @@ def _verify(
         )
         if not ok_fmt:
             return rep
-    except (ValidationError, KeyError, json.JSONDecodeError) as e:
+    except (ValueError, KeyError, TypeError, OSError, pkg.PackageError) as e:
         rep.add("manifest_schema", False, f"{type(e).__name__}: {str(e)[:200]}")
         return rep
     fmt = manifest["bundle_format"]
@@ -261,7 +276,14 @@ def _verify(
     # 2. file integrity -----------------------------------------------------------------
     bad = []
     for name, want in manifest["integrity"].items():
-        p = b / name
+        if name not in ex.INTEGRITY_FILES:
+            bad.append(name)
+            continue
+        try:
+            p = pkg.contained_path(b, name)
+        except pkg.PackageError:
+            bad.append(name)
+            continue
         if not p.is_file() or pkg.sha256_bytes(p.read_bytes()) != want:
             bad.append(name)
     rep.add(

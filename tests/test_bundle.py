@@ -284,6 +284,41 @@ def test_verify_unknown_run_exit_2(capsys):
     assert "RUN_NOT_FOUND" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("path", ["../source", "/tmp/source", r"..\source"])
+def test_embedded_source_path_cannot_escape_bundle(bundle, path):
+    manifest = load(bundle, "input_manifest.json")
+    manifest["source_package"]["embedded_path"] = path
+    (bundle / "input_manifest.json").write_text(json.dumps(manifest))
+    report = verify_bundle(bundle)
+    assert not report.ok and "manifest_schema" in failed_ids(report)
+
+
+def test_bundle_file_symlink_cannot_escape_bundle(bundle, tmp_path):
+    path = bundle / "events.jsonl"
+    outside = tmp_path / "outside-events.jsonl"
+    path.rename(outside)
+    path.symlink_to(outside)
+    report = verify_bundle(bundle)
+    assert not report.ok and "files_present" in failed_ids(report)
+
+
+def test_integrity_cannot_request_arbitrary_files(bundle):
+    manifest = load(bundle, "input_manifest.json")
+    manifest["integrity"]["../outside"] = "0" * 64
+    (bundle / "input_manifest.json").write_text(json.dumps(manifest))
+    report = verify_bundle(bundle)
+    assert not report.ok and "integrity_hashes" in failed_ids(report)
+
+
+@pytest.mark.parametrize("value", [[], None, {"format": pkg.FORMAT}])
+def test_malformed_source_manifest_returns_cli_failure(bundle, capsys, value):
+    (bundle / "source" / pkg.MANIFEST_NAME).write_text(json.dumps(value))
+    report = verify_bundle(bundle)
+    assert not report.ok and "source_package_integrity" in failed_ids(report)
+    assert main(["verify", "--run", str(bundle), "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+
+
 def test_tampered_source_raster_is_detected_and_cli_exits_nonzero(bundle, capsys):
     f = next((bundle / "source" / "files").glob("*TMAX.tif"))
     b = bytearray(f.read_bytes())

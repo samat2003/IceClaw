@@ -56,6 +56,12 @@ bit-for-bit. Verification modes (printed): *embedded source package (offline por
 content-addressed source package* (`--source-package`, must hash to the declared identity); *requires
 local source data* (nothing embedded: stated as such, never silently claimed portable).
 
+Manifest paths must stay within their bundle or source package, including after resolving
+symlinks. Absolute paths, parent traversal and paths through symlinks to outside files are
+rejected. Integrity entries can name only the standard bundle files; source entries must have
+unique paths, file IDs and modalities, a recognized source kind, and matching byte sizes and
+SHA256 hashes. Malformed source packages produce a failed verification check.
+
 ## 4. What `verify` proves (23 named checks; any failed error check => exit 1)
 
 structure and manifest schema; derivation version; per-file SHA256 integrity; events valid with

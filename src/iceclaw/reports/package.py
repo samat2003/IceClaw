@@ -40,6 +40,23 @@ class PackageError(RuntimeError):
         self.code = code
 
 
+def contained_path(root: Path, name: str) -> Path:
+    """Resolve an untrusted relative path without allowing escape through symlinks."""
+    if not isinstance(name, str) or not name or "\\" in name:
+        raise PackageError("INVALID_PATH", "expected a nonempty relative POSIX path")
+    relative = Path(name)
+    if relative.is_absolute() or ".." in relative.parts or ":" in name:
+        raise PackageError("INVALID_PATH", f"not a package-relative path: {name!r}")
+    base = Path(root).resolve()
+    try:
+        path = (base / relative).resolve()
+    except (OSError, RuntimeError) as e:
+        raise PackageError("INVALID_PATH", f"cannot resolve {name!r}") from e
+    if not path.is_relative_to(base) or path == base:
+        raise PackageError("INVALID_PATH", f"path escapes package: {name!r}")
+    return path
+
+
 def canonical(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
@@ -180,13 +197,15 @@ class LoadedPackage:
 
 
 def read_manifest(root: Path) -> dict[str, Any]:
-    p = Path(root) / MANIFEST_NAME
+    p = contained_path(root, MANIFEST_NAME)
     if not p.is_file():
         raise PackageError("MISSING_FILE", f"{MANIFEST_NAME} not found in {root}")
     try:
         m = json.loads(p.read_text())
-    except json.JSONDecodeError as e:
+    except (ValueError, OSError) as e:
         raise PackageError("MANIFEST_TAMPERED", f"manifest is not valid JSON: {e}") from e
+    if not isinstance(m, dict):
+        raise PackageError("INVALID_MANIFEST", "manifest must be a JSON object")
     if m.get("format") != FORMAT:
         raise PackageError("UNSUPPORTED_FORMAT", str(m.get("format")))
     body = {k: v for k, v in m.items() if k != "package_sha256"}
@@ -223,16 +242,32 @@ def _read_geotiff(path: Path):
 
 def load_package(root: Path) -> LoadedPackage:
     """Verify every hash, decode with the same code path as the catalog, build ``RegionArrays``."""
+    try:
+        return _load_package(Path(root))
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError, OSError) as e:
+        raise PackageError("INVALID_MANIFEST", f"invalid source package: {e}") from e
+
+
+def _load_package(root: Path) -> LoadedPackage:
     root = Path(root)
     m = read_manifest(root)
     geo = m["geometry"]
     shape = (geo["height"], geo["width"])
     layers: dict[str, RasterLayer] = {}
+    seen_files: set[Path] = set()
+    seen_ids: set[str] = set()
     for f in m["files"]:
-        p = root / f["file"]
+        p = contained_path(root, f["file"])
+        if p in seen_files or f["file_id"] in seen_ids or f["modality"] in layers:
+            raise PackageError("INVALID_MANIFEST", "duplicate source file, file ID or modality")
+        seen_files.add(p)
+        seen_ids.add(f["file_id"])
+        if f["kind"] not in (KIND_PREDICTION, KIND_OBSERVATION):
+            raise PackageError("INVALID_MANIFEST", f"unknown source kind: {f['kind']!r}")
         if not p.is_file():
             raise PackageError("MISSING_FILE", f["file"])
-        if sha256_bytes(p.read_bytes()) != f["sha256"]:
+        data = p.read_bytes()
+        if len(data) != f["size"] or sha256_bytes(data) != f["sha256"]:
             raise PackageError("CHECKSUM_MISMATCH", f"{f['file']} differs from package manifest")
         if f["kind"] == KIND_PREDICTION:
             values, covered = _decode_prediction(p, f["decoding"], shape)

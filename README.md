@@ -101,6 +101,19 @@ ignored by Git. Without them, tests that need real data skip, and the app starts
 
 ## Reproducibility
 
+### Multi-robot simulation demo
+
+Run `python -m streamlit run app.py`, open **Robot Simulation** in the sidebar, and
+press **Play** below the plot. The default synthetic scenario works without downloaded
+data or an API key: three rovers follow rule-based agent dispatch, travel to targets,
+and perform mock sampling. Adjust robot count and travel budget; download the JSON action log.
+A locally available verified investigation bundle can supply screened follow-up pixels instead.
+These are not confirmed ice locations. This toy grid simulation has no terrain navigation,
+collision avoidance, return-to-base, physical sampling or ice assay; it makes no model calls.
+
+Validate with `python -m pytest tests/test_robot_sim.py -q` (motion, assignment,
+arrival before sampling, travel budgets, repeatability, and a Streamlit page smoke test).
+
 Each bundle contains the event history, every recorded measurement, the report, the ranking table,
 the model-usage record and a content-addressed copy of the exact source rasters. The verifier
 recomputes every measurement from those rasters within declared tolerances, re-derives the

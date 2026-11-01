@@ -103,6 +103,13 @@ ignored by Git. Without them, tests that need real data skip, and the app starts
 
 ### Multi-robot simulation demo
 
+**Adaptive version:** select **Adaptive Mission** in the sidebar. Turn on **Auto-play sensor
+replay**, or scrub the mission tick. Incoming hazard, temperature, index and robot-fault
+messages change target eligibility and rover assignments. Three policy agents lease analysis,
+audit, planning, recovery and sampling roles as tasks arrive; the synchronized map, role table
+and evidence-linked decision log show each handoff. Download the example JSON, change its
+readings, and upload it to compare the decisions. See [adaptive mission details](docs/ADAPTIVE_MISSION.md).
+
 Run `python -m streamlit run app.py`, open **Robot Simulation** in the sidebar, and
 press **Play** below the plot. The default synthetic scenario works without downloaded
 data or an API key: three rovers follow rule-based agent dispatch, travel to targets,

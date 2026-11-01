@@ -1,0 +1,40 @@
+# Adaptive mission demo
+
+Start `python -m streamlit run app.py`, open **Adaptive Mission** and enable **Auto-play sensor
+replay**. No downloaded data or API credentials are needed. Pause and scrub the tick slider
+to inspect the map, rover states, current agent roles, and decision log at the same instant.
+
+Three deterministic policy agents lease roles from arriving work: sensor analysis publishes
+map updates, evidence audit revisits eligibility, mission planning changes assignments, fleet
+recovery releases failed robots' tasks, and sampling records mock collection at arrival.
+Each agent can take any of these roles. The rotating lease policy distributes work; it is not
+an LLM deciding its own capabilities. Task decisions depend on observations and fleet state.
+
+The example begins with three cold targets and normalized demo optical scores. At tick 3,
+a hazard excludes A; tick 4 clears it; tick 5 raises C's priority and redirects a rover.
+At tick 7 a rover fails; tick 9 warms B above the analyst-chosen 110 K screening threshold.
+The healthy rover continues with remaining eligible targets. These messages are synthetic,
+not measurements from a satellite or physical robot. Thresholds and scores do not detect ice.
+
+Download **example sensor input**, edit its readings and upload the JSON array. The adapter
+validates message IDs, source labels, source modes, relative ticks, supported measurement kinds,
+value ranges and target/robot identifiers. Duplicate IDs and nonfinite values are refused.
+Messages are replayed by `(tick, id)`; ticks are simulation time, not UTC acquisition times.
+Supported inputs are temperature in kelvin, normalized demo optical index in [0,1], and binary
+hazard/robot-fault flags. Targets A/B/C and rover-1/rover-2 belong to a fixed synthetic local grid.
+Uploading a `live` label does not authenticate a feed or connect hardware.
+
+Download **full mission evidence and replay** for all observations, events and frame snapshots.
+Event parents refer to earlier events, providing a trace from observation through assessment
+and action. This is a separate simulation format, not an offline-verified scientific bundle.
+
+Test with `python -m pytest tests/test_mission.py -v`. Tests cover changing observations producing
+different decisions, dynamic role leases, valid causal links, task recovery, exclusive assignments,
+sampling only after arrival with eligible evidence, invalid inputs, and synchronized UI scrubbing.
+
+Limits: no physical sensor connection, satellite/InSAR image ingestion, LLM mission planner,
+collision avoidance, route hazard checking, freshness policy, energy model or physical assay.
+Target hazard flags exclude sampling destinations, not intermediate route cells. The original
+four LLM scientific specialists and their verified investigation bundles remain a separate workflow.
+To connect physical sensors, an adapter must supply authenticated acquisition timestamps,
+georeferenced coordinates, units and quality metadata before extending this fixed-grid prototype.

@@ -1,4 +1,4 @@
-# IceClaw workbench (P8): the scientist-facing Streamlit page
+# IceClaw workbench: scientist-facing Streamlit interface
 
 ```bash
 cd ~/IceClaw && source .venv/bin/activate

@@ -92,9 +92,13 @@ def test_fault_releases_task_for_healthy_rover():
     )
 
 
-def test_page_and_timeline_without_credentials():
+def test_page_and_timeline_without_credentials(monkeypatch):
+    from iceclaw.ui import online
+
+    monkeypatch.setattr(online, "render", lambda: None)
     path = Path(__file__).resolve().parents[1] / "pages/2_Adaptive_Mission.py"
     app = AppTest.from_file(path).run(timeout=30)
+    app.radio[0].set_value("Offline replay").run()
     assert not app.exception
     app.slider[0].set_value(9).run()
     assert not app.exception

@@ -11,6 +11,14 @@ from iceclaw.agents.mission import Observation, demo_observations, run_mission
 
 st.set_page_config(page_title="IceClaw · Adaptive mission", page_icon="🛰️", layout="wide")
 st.title("Adaptive multi-agent mission")
+mode = st.radio(
+    "Observation mode", ["Online satellite monitoring", "Offline replay"], horizontal=True
+)
+if mode == "Online satellite monitoring":
+    from iceclaw.ui.online import render
+
+    render()
+    st.stop()
 st.warning("SIMULATED ROVERS · synthetic local map · mock samples, no ice detection")
 st.caption(
     "Policy agents share evidence and lease new roles as conditions change. "

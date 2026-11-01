@@ -103,8 +103,12 @@ ignored by Git. Without them, tests that need real data skip, and the app starts
 
 ### Multi-robot simulation demo
 
-**Adaptive version:** select **Adaptive Mission** in the sidebar. Turn on **Auto-play sensor
-replay**, or scrub the mission tick. Incoming hazard, temperature, index and robot-fault
+**Adaptive version:** select **Adaptive Mission** in the sidebar. It automatically queries the
+public Sentinel-2 catalog and maps recent scene footprints for the selected Earth region,
+refreshing every 60 seconds while open. No uploads or API key are needed. Agents review actual
+scene acquisition time and cloud metadata and hand off image-analysis tasks for suitable scenes.
+This is online scene discovery and quality triage, not pixel-level ice detection or a lunar feed.
+Select **Offline replay** to scrub the simulated mission tick. Hazard, temperature, index and robot-fault
 messages change target eligibility and rover assignments. Three policy agents lease analysis,
 audit, planning, recovery and sampling roles as tasks arrive; the synchronized map, role table
 and evidence-linked decision log show each handoff. Download the example JSON, change its

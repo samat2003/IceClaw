@@ -1,6 +1,33 @@
 # Adaptive mission demo
 
-Start `python -m streamlit run app.py`, open **Adaptive Mission** and enable **Auto-play sensor
+Start `python -m streamlit run app.py` and open **Adaptive Mission**. The default mode is
+**Online satellite monitoring**: no upload, no API key, and no manual download. It queries
+[Element 84 Earth Search](https://element84.com/earth-search/) for the 12 latest Sentinel-2 L2A
+scenes intersecting the chosen Earth region. A 60-second polling fragment runs while the page
+is open, with a 60-second cache per region. Choose Svalbard, Iceland or Alaska. Map tiles and
+provider thumbnails also require internet access. This is not a background service after the
+browser session closes.
+
+The observer detects new scenes or metadata changes; the quality auditor checks acquisition
+age and reported cloud cover; the planner requests image analysis only for scenes no older
+than seven days with cloud cover at most 35%. These are explicit quality thresholds, not a
+scientific detection rule. Roles rotate across the three policy agents. Repeated unchanged
+scene metadata does not generate duplicate handoffs, while changed eligibility triggers review.
+Scene IDs, acquisition timestamps, fetch timestamps, response hashes and event parents are
+retained in the downloadable evidence. The fetch timestamp is not the observation timestamp.
+
+Connection failure is visible. The page can display its last successful response, labeled as
+disconnected, with new tasks paused; it never creates replacement synthetic observations.
+The source is an online satellite **catalog** and its map/thumbnail products: it does not
+download spectral bands, calculate ice detections, ingest InSAR, or control physical robots.
+Earth observations are kept separate from the original lunar science claims.
+
+Tests: `python -m pytest tests/test_online.py -v` (offline mocked catalog). A real-network check
+is available with `python scripts/online_catalog_smoke.py`; it saves catalog and agent evidence
+to `/tmp/iceclaw-online-evidence.json`. The test requires internet access and does not spend
+model tokens.
+
+For the synthetic robot demo, select **Offline replay** and enable **Auto-play sensor
 replay**. No downloaded data or API credentials are needed. Pause and scrub the tick slider
 to inspect the map, rover states, current agent roles, and decision log at the same instant.
 
@@ -32,7 +59,7 @@ Test with `python -m pytest tests/test_mission.py -v`. Tests cover changing obse
 different decisions, dynamic role leases, valid causal links, task recovery, exclusive assignments,
 sampling only after arrival with eligible evidence, invalid inputs, and synchronized UI scrubbing.
 
-Limits: no physical sensor connection, satellite/InSAR image ingestion, LLM mission planner,
+Offline replay limits: no physical sensor connection, satellite/InSAR image ingestion, LLM mission planner,
 collision avoidance, route hazard checking, freshness policy, energy model or physical assay.
 Target hazard flags exclude sampling destinations, not intermediate route cells. The original
 four LLM scientific specialists and their verified investigation bundles remain a separate workflow.

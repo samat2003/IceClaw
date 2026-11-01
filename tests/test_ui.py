@@ -392,7 +392,8 @@ def test_page_shows_failed_verification_and_disables_download(saved_runs, monkey
     assert "VERIFICATION FAILED" in text_of(at, "error")
     df = at.dataframe[-1].value
     assert "❌ FAIL" in set(df["outcome"])
-    dl = at.get("download_button")
+    # the public-bundle download only (P8 follow-up screening adds separate post-processing files)
+    dl = [d for d in at.get("download_button") if "public bundle" in d.proto.label.lower()]
     assert dl and all(d.proto.disabled for d in dl)
 
 
@@ -400,9 +401,10 @@ def test_page_download_offered_for_public_bundle_only(saved_runs, monkeypatch):
     page_env(monkeypatch, saved_runs)
     forbid_model_calls(monkeypatch)
     at = AppTest.from_file(APP, default_timeout=120).run()
-    dl = at.get("download_button")
-    assert dl and not dl[0].proto.disabled
-    assert "public bundle" in dl[0].proto.label.lower() and "bundle/2" in dl[0].proto.label
+    dl = [d for d in at.get("download_button") if "public bundle" in d.proto.label.lower()]
+    assert len(dl) == 1 and not dl[0].proto.disabled and "bundle/2" in dl[0].proto.label
+    others = [d.proto.label for d in at.get("download_button") if d not in dl]
+    assert others and all("post-processing" in x for x in others)  # labelled, never the bundle
     assert "no provider-opaque reasoning payloads" in text_of(at, "caption")
 
 

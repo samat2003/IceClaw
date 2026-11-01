@@ -217,12 +217,18 @@ class SwarmRuntime:
         model: str = "unspecified",
         communication: bool = True,
         require_assessment: bool = False,
+        review_mode: bool = False,
+        review_window: tuple[int, int, int, int] | None = None,
     ) -> None:
         """``communication=False`` (P7 isolated arm): no event reaches another agent, agents can
         neither read nor cite each other's events, and challenges / test requests are refused.
         ``require_assessment=True`` (P7 benchmark): each agent must file one machine-readable
         assessment via ``submit_assessment``; an agent that ends a turn without one is woken
-        again (bounded by ``max_rounds_per_agent``). Defaults keep P5/P6 behaviour unchanged."""
+        again (bounded by ``max_rounds_per_agent``). ``review_mode=True`` (targeted window
+        review; needs ``require_assessment``): agents file ``submit_review`` instead of
+        ``submit_assessment`` and every review must cite at least one measurement made on
+        ``review_window`` ([row0, row1, col0, col1], half-open native pixels). Defaults keep
+        P5/P6 behaviour unchanged."""
         if len({s.agent_id for s in specs}) != len(specs) or SUPERVISOR in {
             s.agent_id for s in specs
         }:
@@ -249,6 +255,10 @@ class SwarmRuntime:
         self._dedup: dict[tuple, str] = {}
         self.communication = communication
         self.require_assessment = require_assessment
+        if review_mode and not require_assessment:
+            raise ValueError("review_mode requires require_assessment")
+        self.review_mode = review_mode
+        self.review_window = tuple(review_window) if review_window else None
         self.assessments: dict[str, dict[str, Any]] = {}  # agent -> latest assessment
         self.assessment_history: list[dict[str, Any]] = []
         self._granted: dict[str, set[str]] = {s.agent_id: set() for s in specs}
@@ -327,7 +337,7 @@ class SwarmRuntime:
         if not supervisor:
             is_assessment = kind is EventKind.COMPLETION and (
                 fields.get("claim_or_request") or ""
-            ).startswith(self.ASSESSMENT_PREFIX)
+            ).startswith((self.ASSESSMENT_PREFIX, self.REVIEW_PREFIX))
             held = self.held_by_others(agent_id, "assess_event")
             own = 0 if is_assessment else self._outstanding(agent_id, "assess_event")
             if self.store.count_events() + 1 + held + own > self.limits.budget.max_events:
@@ -886,7 +896,7 @@ class SwarmRuntime:
 
         The event text is ``ASSESSMENT {json}`` followed by the rationale; the JSON part is the
         pre-registered decision record parsed by the benchmark runner."""
-        if not self.require_assessment:
+        if not self.require_assessment or self.review_mode:
             return _err("NOT_A_BENCHMARK_RUN", "assessments are only used in benchmark runs")
         if verdict not in self.VERDICTS:
             return _err("BAD_ENUM", f"verdict must be one of {list(self.VERDICTS)}")
@@ -927,6 +937,85 @@ class SwarmRuntime:
         self.assessments[agent_id] = entry
         self.assessment_history.append(entry)
         self._release_reserve(agent_id)  # its unused reserve returns to the common pool
+        return {"ok": True, "event_id": ev.event_id}
+
+    # --------------------------------------------------- targeted window review (cross-modal)
+    REVIEW_PREFIX = "REVIEW "
+    REVIEW_FINDINGS = ("supports_screening", "weak_or_conflicting", "insufficient_evidence")
+
+    def _window_scoped(self, event: EvidenceEvent) -> bool:
+        """True iff ``event`` is a measurement/test result made on exactly the review window."""
+        if self.review_window is None or not event.tool_run_id:
+            return False
+        got = self.store.get_tool_run(event.tool_run_id)
+        if got is None:
+            return False
+        w = got[0].parameters.get("window")
+        return w is not None and tuple(w) == self.review_window
+
+    def submit_review(
+        self,
+        agent_id: str,
+        finding: str,
+        cites: list[str] | None,
+        rationale: str,
+        missing_evidence: list[str] | None = None,
+        alternatives: list[str] | None = None,
+        follow_up: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """File (or replace) this specialist's machine-readable review of the target window.
+
+        ``finding`` is the specialist's own judgement of how well ITS evidence supports the
+        shared screening question; ``insufficient_evidence`` is always allowed. At least one cited
+        measurement must have been made on the review window. Stored as a completion event
+        ``REVIEW {json} | rationale`` so the log carries it verbatim."""
+        if not (self.require_assessment and self.review_mode):
+            return _err("NOT_A_REVIEW_RUN", "reviews are only used in targeted window reviews")
+        if finding not in self.REVIEW_FINDINGS:
+            return _err("BAD_ENUM", f"finding must be one of {list(self.REVIEW_FINDINGS)}")
+        cited, err = self._existing(cites, agent_id)
+        if err:
+            return err
+        evidence = [e for e in cited if e.event_kind in EVIDENCE_KINDS]
+        if not evidence:
+            return _err("NO_EVIDENCE", "cite at least one measurement/test_result event id")
+        if not any(self._window_scoped(e) for e in evidence):
+            return _err(
+                "NOT_WINDOW_SCOPED",
+                f"cite at least one measurement made with window={list(self.review_window or ())}",
+            )
+        record = {
+            "finding": finding,
+            "missing_evidence": _clean_list(missing_evidence),
+            "follow_up": _clean_list(follow_up),
+        }
+        text = self.REVIEW_PREFIX + json.dumps(record, sort_keys=True) + " | " + rationale
+        ev, perr = self._publish(
+            agent_id,
+            EventKind.COMPLETION,
+            parent_event_ids=[e.event_id for e in cited],
+            claim_or_request=_clip(text),
+            hypothesis_status=HypothesisStatus.SUPPORTED
+            if finding == "supports_screening"
+            else HypothesisStatus.UNRESOLVED,
+            evidence_type=EvidenceType.HYPOTHESIS,
+            alternative_explanations=_clean_list(alternatives),
+            limitations=_clean_list(missing_evidence),
+        )
+        if perr:
+            return perr
+        assert ev is not None
+        entry = {
+            "verdict": finding,
+            "suspected_layers": [],
+            "agent_id": agent_id,
+            "event_id": ev.event_id,
+            "cites": [e.event_id for e in cited],
+            **{k: record[k] for k in ("missing_evidence", "follow_up")},
+        }
+        self.assessments[agent_id] = entry
+        self.assessment_history.append(entry)
+        self._release_reserve(agent_id)
         return {"ok": True, "event_id": ev.event_id}
 
     # ------------------------------------------------------------------ reading

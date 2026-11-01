@@ -614,3 +614,123 @@ def public_bundle_zip(path: str | Path) -> bytes:
 def source_arrays(view: BundleView):
     """Hash-verified arrays of the bundle's own embedded source package."""
     return pkg.load_package(view.source_dir).arrays
+
+
+# ================================================================ research follow-up screening
+FOLLOWUP_COLOR = "#00A86B"
+REVIEW_COLOR = "#E69F00"
+TRIAGE_LABEL = (
+    "POST-PROCESSING: computed now from this bundle's source package by deterministic code; not "
+    "an action of the agents that produced the bundle. A research-triage screen, not an ice "
+    "detection, abundance, calibrated likelihood or landing-site assessment."
+)
+TRIAGE_CRITERIA = (
+    "A pixel meets the screening rule only if ALL hold: permanent shadow (LPSR ≥ 0.5), maximum "
+    "temperature TMAX ≤ 110 K, slope ≤ 15°, and raw prediction index ≥ this tile's 90th "
+    "percentile of valid values (no clipping). A **follow-up window** contains at least one such "
+    "pixel. A **review window** is a high-index window (≥ 50 % of its pixels at or above that "
+    "percentile) that is not a follow-up window and where at least one observation condition "
+    "holds for fewer than half of its high-index pixels: an evidence discrepancy for review, not "
+    "a confirmed model fault."
+)
+
+
+def triage_window_rows(triage: dict[str, Any], kind: str) -> list[dict[str, Any]]:
+    """Table rows for the follow-up (``kind='followup'``) or review windows, in selection order."""
+    sel = triage["selection"]
+    ids = sel["followup_ids"] if kind == "followup" else sel["review_ids"]
+    by_id = {w["id"]: w for w in triage["windows"]}
+    rows = []
+    for rank, i in enumerate(ids, start=1):
+        w = by_id[i]
+        r0, r1, c0, c1 = w["window"]
+        row = {
+            "rank": rank,
+            "window": w["label"],
+            "rows": f"{r0}–{r1}",
+            "cols": f"{c0}–{c1}",
+            "lat": w["centre_lat"],
+            "lon": w["centre_lon"],
+            "coverage": w["coverage"],
+            "index mean": w["prediction_index"]["mean"],
+            "index max": w["prediction_index"]["max"],
+            "shadow fraction": w["shadow_fraction"],
+            "TMAX min (K)": w["tmax_k"]["min"],
+            "TMAX median (K)": w["tmax_k"]["median"],
+            "slope median (°)": w["slope_deg"]["median"],
+            "slope max (°)": w["slope_deg"]["max"],
+            "high-index px": w["n_high_index"],
+            "pixels meeting all": w["n_joint"],
+        }
+        if kind == "review":
+            row["weak support"] = ", ".join(sel["review_reasons"].get(str(i), []))
+            row["high-index fraction"] = w["frac_high_index"]
+        rows.append(row)
+    return rows
+
+
+def triage_overlay_figure(geom: RegionGeometry, layer: LayerGrid, triage: dict[str, Any]):
+    """The prediction heatmap with the screening windows outlined (green = follow-up, orange
+    dashed = review). Outlines are drawn from the screen's own window bounds."""
+    import plotly.graph_objects as go
+
+    fig = make_heatmap_figure(geom, layer, height=560)
+    sel = triage["selection"]
+    by_id = {w["id"]: w for w in triage["windows"]}
+    for ids, color, dash, name, label in (
+        (sel["followup_ids"], FOLLOWUP_COLOR, "solid", "Follow-up screening window", "follow-up"),
+        (sel["review_ids"], REVIEW_COLOR, "dash", "Model–observation review window", "review"),
+    ):
+        xs, ys, texts = [], [], []
+        for i in ids:
+            w = by_id[i]
+            r0, r1, c0, c1 = w["window"]
+            x0, y_top = pixel_xy_km(geom, r0 - 0.5, c0 - 0.5)
+            x1, y_bot = pixel_xy_km(geom, r1 - 0.5, c1 - 0.5)
+            fig.add_shape(
+                type="rect",
+                x0=x0,
+                x1=x1,
+                y0=y_bot,
+                y1=y_top,
+                line={"color": color, "width": 2.5, "dash": dash},
+            )
+            xs.append((x0 + x1) / 2)
+            ys.append((y_top + y_bot) / 2)
+            texts.append(
+                f"{w['label']} ({label}): {w['n_joint']} pixel(s) meet all conditions; "
+                f"lat {w['centre_lat']:.3f}, lon {w['centre_lon']:.3f}"
+            )
+        fig.add_trace(
+            go.Scatter(
+                x=xs,
+                y=ys,
+                mode="markers",
+                name=name,
+                text=texts,
+                hovertemplate="%{text}<extra></extra>",
+                marker={"symbol": "square-open", "size": 9, "color": color, "line": {"width": 2}},
+            )
+        )
+    fig.update_layout(title={"text": "Prediction index with screening windows", "x": 0.01})
+    return fig
+
+
+def saved_reviews(runs_root: Path, bundle_name: str) -> list[dict[str, Any]]:
+    """Targeted-review records (``runs/_reviews/*/review.json``) made from this bundle, newest
+    first. Malformed or foreign files are ignored."""
+    out: list[dict[str, Any]] = []
+    base = Path(runs_root) / "_reviews"
+    if not base.is_dir():
+        return out
+    for d in sorted(base.iterdir(), reverse=True):
+        f = d / "review.json"
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if rec.get("format") == "iceclaw-window-review/1" and (
+            rec.get("source", {}).get("bundle") == bundle_name
+        ):
+            out.append(rec)
+    return out

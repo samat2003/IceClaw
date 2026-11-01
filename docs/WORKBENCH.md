@@ -18,7 +18,8 @@ exporter/verifier and the agent runtime; it recomputes no science. Code: `app.py
 | 2 Investigate | **Recorded investigation** (default: `inv-20261031T201513Z-p6-public`, labelled `RECORDED INVESTIGATION`, no model calls) and **Live investigation** (explicit, paid; see below). |
 | 3 Specialists | Thermal, Geology, Prediction Auditor, Skeptic cards (role, events, model calls, tokens) and the real event timeline. Cross-agent follow-up is highlighted only if events of kind test_request / test_result / challenge / revision exist; otherwise the page says none occurred. |
 | 4 Findings | Headline recorded measurements, full measurement table (units from the recorded tool output), AI hypotheses (labelled, with cited evidence, alternatives, limitations), open questions and the agents' own proposed follow-up, the attention ranking (separate tab, with tie groups), sources, attribution and limitations. |
-| 5 Verify and export | **Verify findings** runs the existing offline verifier (no key, no network) and lists every check with its real outcome; failure disables the download. **Download** gives the public-redacted `iceclaw-bundle/2` zip only. |
+| 5 Research follow-up screening | Deterministic, post-processing screen of the bundle's source rasters: follow-up windows and model–observation review windows outlined on the prediction heatmap, evidence tables, criteria, sensitivity, provenance, optional `triage.json`/CSV downloads, and an optional, explicitly confirmed targeted review by the four specialists. Separate from the attention ranking. See [TRIAGE_REVIEW.md](TRIAGE_REVIEW.md). |
+| 6 Verify and export | **Verify findings** runs the existing offline verifier (no key, no network) and lists every check with its real outcome; failure disables the download. **Download** gives the public-redacted `iceclaw-bundle/2` zip only. |
 
 ## Live investigations: safety properties
 

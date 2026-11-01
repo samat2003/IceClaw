@@ -77,6 +77,9 @@ class JobSnapshot:
     public_run_id: str = ""
     ended_reason: str = ""
     problems: list[str] = field(default_factory=list)
+    kind: str = "investigation"  # "investigation" | "review" (targeted window review)
+    events_db: str = ""  # read-only progress source for reviews (investigations use internal/)
+    review_dir: str = ""
 
 
 @dataclass
@@ -192,6 +195,86 @@ class LiveRunManager:
             self._thread.start()
             return StartResult(True, "STARTED", run_id)
 
+    def start_review(self, *, source_dir: Path, window_id: int, bundle_name: str) -> StartResult:
+        """Begin ONE targeted window review (paid), sharing the single-flight guard with live
+        investigations. The window is chosen by the user from the deterministic screen."""
+        with self._lock:
+            if self._snap.state == RUNNING or (self._thread and self._thread.is_alive()):
+                return StartResult(False, "ALREADY_RUNNING", f"{self._snap.run_id} is in progress")
+            other = self._foreign_run()
+            if other:
+                return StartResult(
+                    False, "ALREADY_RUNNING", f"{other.get('run_id')} (other process)"
+                )
+            service = self._factory()
+            if service.client_factory is None:
+                status = live_config_status(service.settings)
+                if not status["ok"]:
+                    return StartResult(False, status["code"], status["message"])
+            stamp = f"{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
+            run_id, n = f"rev-{stamp}-ui", 1
+            while (self.runs_root / "_reviews" / run_id).exists():
+                n += 1
+                run_id = f"rev-{stamp}-ui{n}"
+            out_dir = self.runs_root / "_reviews" / run_id
+            self._snap = JobSnapshot(
+                RUNNING,
+                run_id,
+                bundle_name,
+                started_utc=datetime.now(UTC).isoformat(),
+                kind="review",
+                events_db=str(out_dir / "events.sqlite"),
+                review_dir=str(out_dir),
+            )
+            self.runs_root.mkdir(parents=True, exist_ok=True)
+            self._marker().write_text(
+                json.dumps({"pid": os.getpid(), "run_id": run_id, "region_id": bundle_name}),
+                encoding="utf-8",
+            )
+            self.starts_attempted += 1
+            self._thread = threading.Thread(
+                target=self._work_review,
+                args=(service, Path(source_dir), window_id, bundle_name, out_dir),
+                daemon=True,
+                name=run_id,
+            )
+            self._thread.start()
+            return StartResult(True, "STARTED", run_id)
+
+    def _work_review(
+        self,
+        service: InvestigationService,
+        source_dir: Path,
+        window_id: int,
+        bundle_name: str,
+        out_dir: Path,
+    ) -> None:
+        from iceclaw import services
+
+        err_code = err_msg = ended = ""
+        try:
+            res = services.investigate_window(
+                service,
+                source_dir=source_dir,
+                window_id=window_id,
+                out_dir=out_dir,
+                source_label=bundle_name,
+            )
+            ended = str(res.record["status"])
+        except BaseException as e:  # noqa: BLE001 - surface any failure to the page
+            err_code = str(getattr(e, "code", type(e).__name__))
+            err_msg = scrub(f"{type(e).__name__}: {e}")
+        finally:
+            try:
+                self._marker().unlink(missing_ok=True)
+            except OSError:
+                pass
+            with self._lock:
+                s = self._snap
+                s.finished_utc = datetime.now(UTC).isoformat()
+                s.ended_reason, s.error_code, s.error_message = ended, err_code, err_msg
+                s.state = FAILED if err_code else SUCCEEDED
+
     def _work(self, service: InvestigationService, region_id: str, run_id: str) -> None:
         err_code = err_msg = ""
         ended = ""
@@ -242,8 +325,12 @@ class LiveRunManager:
         """Real events and token use read from the run's SQLite history (read-only)."""
         from iceclaw.swarm.store import EvidenceStore
 
-        rid = run_id or self.snapshot().run_id
-        db = self.runs_root / rid / "internal" / "events.sqlite"
+        snap = self.snapshot()
+        rid = run_id or snap.run_id
+        if snap.events_db and rid == snap.run_id:
+            db = Path(snap.events_db)
+        else:
+            db = self.runs_root / rid / "internal" / "events.sqlite"
         if not rid or not db.is_file():
             return Progress([], 0, 0)
         try:

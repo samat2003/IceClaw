@@ -493,3 +493,165 @@ def investigate_scenario(
         {k: dict(v) for k, v in rt.assessments.items()},
         list(rt.assessment_history),
     )
+
+
+# ================================================================ targeted window review
+DEFAULT_REVIEW_BUDGET = RunBudget(
+    max_events=48, max_hops=5, max_tool_calls=16, max_llm_calls=16, timeout_s=360.0
+)
+DEFAULT_REVIEW_MAX_INPUT_TOKENS = 64_000  # same TOTALS as the P7 v2 arms; not silently raised
+REVIEW_DIGEST_CHARS = 3000  # smaller digest/prompt than P5 to curb Skeptic prompt growth
+REVIEW_PROMPT_CHARS = 7000
+
+
+def default_review_reserve():
+    """Guaranteed per-specialist minimum inside the totals (identical to P7 protocol v2)."""
+    from iceclaw.swarm.runtime import AgentReserve
+
+    return AgentReserve(llm_calls=3, tool_calls=3, input_tokens=12_000, assessment_events=1)
+
+
+@dataclass
+class WindowReviewResult:
+    review_id: str
+    run_dir: Path
+    record: dict[str, Any]
+    summary: dict[str, Any]
+
+
+def investigate_window(
+    service: InvestigationService,
+    *,
+    source_dir: Path,
+    window_id: int,
+    out_dir: Path,
+    source_label: str = "",
+    arm: str = "communicating_specialists",
+    budget: RunBudget | None = None,
+    max_input_tokens: int = DEFAULT_REVIEW_MAX_INPUT_TOKENS,
+    reserve: Any = "default",
+    triage_config: Any = None,
+) -> WindowReviewResult:
+    """Targeted cross-modal review of ONE screening window by the real specialist runtime.
+
+    The target is chosen by deterministic screening (never by an LLM); the specialists decide
+    their own measurements, requests, challenges and reviews through the same tools, permissions,
+    budgets, citation rules and event store as every other run. ``out_dir`` is a fresh directory.
+    """
+    import json
+    from uuid import uuid4
+
+    from iceclaw.agents.benchmark_arms import build_arm_runners
+    from iceclaw.agents.provider import build_openai_client
+    from iceclaw.agents.review import build_review_prompt, review_plan
+    from iceclaw.contracts import AgentRegionContext, SourceMode
+    from iceclaw.data.catalog import available_tool_names
+    from iceclaw.reports import package as pkg
+    from iceclaw.reports.window_review import build_review_record
+    from iceclaw.science import triage as tg
+    from iceclaw.swarm.runtime import RunLimits, SwarmRuntime
+    from iceclaw.swarm.store import EvidenceStore
+
+    scripted = service.client_factory is not None
+    if not scripted:
+        service.settings.require_live_llm()
+    loaded = pkg.load_package(Path(source_dir))  # verifies every source hash
+    arrays, man = loaded.arrays, loaded.manifest
+    cfg = triage_config or tg.TriageConfig()
+    result = tg.screen_arrays(arrays, cfg, sensitivity=False)
+    w = tg.window_by_id(result, window_id)
+    target = {
+        "label": w["label"],
+        "id": w["id"],
+        "window": w["window"],
+        "centre_lat": w["centre_lat"],
+        "centre_lon": w["centre_lon"],
+        "category": tg.window_category(result, window_id),
+    }
+    budget = budget or DEFAULT_REVIEW_BUDGET
+    plan = review_plan(arm, budget.max_llm_calls, target)
+    r = man["region"]
+    ctx = AgentRegionContext(
+        region_id=r["region_id"],
+        pole=r["pole"],
+        footprint=[tuple(c) for c in man["geometry"]["footprint_lat_lon_NW_NE_SE_SW"]],
+        width=man["geometry"]["width"],
+        height=man["geometry"]["height"],
+        spatial_resolution_m=man["geometry"]["resolution_m"],
+        lunar_crs=man["geometry"]["lunar_crs"],
+        source_ids=[r["source_dataset"], r["original_tile_id"], r["prediction_checkpoint_id"]],
+        source_mode=SourceMode(r["source_mode"]),
+        available_modalities=sorted(arrays.layers),
+        available_tools=sorted(available_tool_names(arrays)),
+        budget=budget,
+    )
+    if reserve == "default":
+        reserve = default_review_reserve()
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=False)
+    limits = RunLimits(
+        budget=budget,
+        max_rounds_per_agent=plan.max_rounds_per_agent,
+        max_roundtrips_per_turn=plan.max_roundtrips_per_turn,
+        max_function_calls_per_turn=plan.max_function_calls_per_turn,
+        max_input_tokens=max_input_tokens,
+        digest_max_chars=REVIEW_DIGEST_CHARS,
+        max_prompt_chars=REVIEW_PROMPT_CHARS,
+        reserve=reserve if len(plan.specs) > 1 else None,
+    )
+    store = EvidenceStore(out_dir / "events.sqlite")
+    st_ = service.settings
+    provider = service.provider_label or ("scripted" if scripted else st_.llm_provider)
+    model = service.model_label or ("scripted-v0" if scripted else (st_.llm_model or ""))
+    inv_id = f"review-{arm}-{w['label']}-{uuid4().hex[:8]}"
+    rt = SwarmRuntime(
+        investigation_id=inv_id,
+        context=ctx,
+        arrays=arrays,
+        store=store,
+        specs=list(plan.specs),
+        limits=limits,
+        provider=provider,
+        model=model,
+        communication=plan.communication,
+        require_assessment=True,
+        review_mode=True,
+        review_window=tuple(w["window"]),
+    )
+    factory = service.client_factory or (
+        lambda runtime, aid: build_openai_client(service.settings, runtime, aid, limits)
+    )
+    try:
+        summary = asyncio.run(rt.run(build_arm_runners(rt, factory), build_review_prompt))
+        rt.write_outputs(out_dir, summary)
+        sdict = {**summary.__dict__, "provider": provider, "model": model}
+        record = build_review_record(
+            store,
+            arrays,
+            arm=arm,
+            agent_ids=[sp.agent_id for sp in plan.specs],
+            target=target,
+            run=sdict,
+        )
+    finally:
+        store.close()
+    record["review_id"] = inv_id
+    record["source"] = {
+        "bundle": source_label,
+        "package_sha256": man["package_sha256"],
+        "region_id": r["region_id"],
+        "triage_config_sha256": cfg.sha256(),
+    }
+    record["runtime"] = {
+        "provider": provider,
+        "model": model,
+        "budget": budget.model_dump(),
+        "max_input_tokens": max_input_tokens,
+        "reserve": None if limits.reserve is None else limits.reserve.__dict__,
+        "digest_max_chars": REVIEW_DIGEST_CHARS,
+        "max_prompt_chars": REVIEW_PROMPT_CHARS,
+    }
+    (out_dir / "review.json").write_text(
+        json.dumps(record, indent=1, sort_keys=True, default=str), encoding="utf-8"
+    )
+    return WindowReviewResult(inv_id, out_dir, record, sdict)

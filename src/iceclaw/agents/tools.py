@@ -232,7 +232,34 @@ def make_tools(runtime: SwarmRuntime, spec: AgentSpec) -> list[Any]:
     if runtime.communication:  # isolated agents (P7) get no tools that address other agents
         out += [publish_challenge, request_test]
     out += [publish_revision, conclude, list_events, get_event]
-    if runtime.require_assessment:
+    if runtime.review_mode:
+
+        @tool(
+            name="submit_review",
+            description=(
+                "File YOUR review of the target window (a later call replaces the earlier one). "
+                "finding: 'supports_screening' if YOUR evidence is consistent with the screening "
+                "case for this window, 'weak_or_conflicting' if it weakens or contradicts it, "
+                "'insufficient_evidence' if you cannot judge. cites: your measurement event ids "
+                "(at least one measured on the target window). Also list missing_evidence, "
+                "alternatives (competing explanations) and follow_up (suggested analyses)."
+            ),
+        )
+        @_json
+        def submit_review(
+            finding: Annotated[str, "supports_screening|weak_or_conflicting|insufficient_evidence"],
+            cites: Annotated[list[str], "measurement event ids, >= 1 on the target window"],
+            rationale: Annotated[str, "one or two sentences; numbers only from cited events"],
+            missing_evidence: Annotated[list[str] | None, "evidence you lacked"] = None,
+            alternatives: Annotated[list[str] | None, "competing explanations"] = None,
+            follow_up: Annotated[list[str] | None, "suggested follow-up analyses"] = None,
+        ) -> str:
+            return runtime.submit_review(  # type: ignore[return-value]
+                aid, finding, cites, rationale, missing_evidence, alternatives, follow_up
+            )
+
+        out.append(submit_review)
+    elif runtime.require_assessment:
         mods = ", ".join(runtime.context.available_modalities)
 
         @tool(

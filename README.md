@@ -118,6 +118,19 @@ The public bundle omits provider-opaque reasoning data and the internal run data
 workbench offers only public bundles for download. Details:
 [docs/INVESTIGATION_BUNDLE.md](docs/INVESTIGATION_BUNDLE.md).
 
+## Research follow-up screening (deterministic, new)
+
+Beyond the attention ranking, IceClaw can screen the paired tile pixel by pixel with a transparent,
+analyst-chosen rule (permanent shadow, TMAX ≤ 110 K, slope ≤ 15°, and a prediction at or above the
+tile's 90th percentile) and list **follow-up screening windows** and separate **model–observation
+review windows**. On the real tile this gives 16 follow-up windows (195 of 65,536 pixels) and 8
+review windows; the count depends strongly on the temperature threshold (10–32 windows for
+100–120 K). It is reproducible offline (`iceclaw triage` / `verify-triage`) and is a screen for
+human follow-up, **not** an ice detection, probability, or validated site ranking. An optional,
+paid, explicitly confirmed review of one window by the four specialists reuses the same agent
+runtime; it has so far been tested only with scripted providers. Details:
+[docs/TRIAGE_REVIEW.md](docs/TRIAGE_REVIEW.md).
+
 ## Evaluation: does agent communication help?
 
 A pre-registered experiment ([docs/BENCHMARK_P7.md](docs/BENCHMARK_P7.md)) gave each approach the
@@ -157,7 +170,7 @@ AI hypotheses, and evidence that anyone can verify independently.
 [Project specification](docs/PROJECT_SPEC.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) ·
 [Workbench](docs/WORKBENCH.md) · [Bundles and verification](docs/INVESTIGATION_BUNDLE.md) ·
 [Agent runtime](docs/AGENT_RUNTIME.md) · [Evaluation protocol](docs/EVALUATION_PROTOCOL.md) ·
-[P7 benchmark](docs/BENCHMARK_P7.md) · [Upstream MOONATLAS](docs/UPSTREAM_MOONATLAS.md) ·
+[P7 benchmark](docs/BENCHMARK_P7.md) · [Triage and window review](docs/TRIAGE_REVIEW.md) · [Upstream MOONATLAS](docs/UPSTREAM_MOONATLAS.md) ·
 [SomBench ingestion](docs/SOMBENCH_INGESTION.md) · [Repository rules](AGENTS.md).
 Superseded planning drafts are kept in [docs/archive/](docs/archive/).
 

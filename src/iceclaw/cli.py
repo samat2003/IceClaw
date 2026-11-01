@@ -64,6 +64,30 @@ def build_parser() -> argparse.ArgumentParser:
     pub.add_argument("--out", metavar="NEW_BUNDLE_ID")
     rep = sub.add_parser("replay", help="Replay a saved run from its events (no model call)")
     rep.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    tri = sub.add_parser(
+        "triage",
+        help="Deterministic research-triage screening of a bundle's source package (no model call)",
+    )
+    tri.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    tri.add_argument("--out", metavar="DIR", help="default: <runs>/_derived/<bundle>/triage")
+    tri.add_argument("--no-write", action="store_true", help="print only")
+    vt = sub.add_parser(
+        "verify-triage", help="Recompute a triage artifact from the bundle's source (offline)"
+    )
+    vt.add_argument("--artifact", required=True, metavar="DIR_OR_FILE")
+    vt.add_argument("--run", metavar="RUN_ID_OR_PATH", help="default: the bundle named inside")
+    rv = sub.add_parser(
+        "review", help="Targeted collaborative review of ONE screening window (LIVE, paid)"
+    )
+    rv.add_argument("--run", required=True, metavar="RUN_ID_OR_PATH")
+    rv.add_argument("--window", type=int, required=True, metavar="WINDOW_ID")
+    rv.add_argument(
+        "--arm",
+        choices=["single_generalist", "isolated_specialists", "communicating_specialists"],
+        default="communicating_specialists",
+    )
+    rv.add_argument("--out", metavar="DIR", help="default: <runs>/_reviews/<new id>")
+    rv.add_argument("--confirm-paid", action="store_true", help="required: real, paid OpenAI calls")
     ben = sub.add_parser(
         "benchmark", help="P7 paired-tile benchmark: build-suite, run, freeze, score, estimate"
     )
@@ -89,7 +113,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.command:
         parser.print_help()
         return 1
-    if args.command in ("list-regions", "investigate") or (
+    if args.command in ("list-regions", "investigate", "review") or (
         args.command == "benchmark" and args.action in ("run", "build-suite")
     ):
         load_dotenv_file()  # IceClaw's own loader; values are never printed
@@ -105,6 +129,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _publish(args)
     if args.command == "replay":
         return _replay(args.run)
+    if args.command == "triage":
+        return _triage(args)
+    if args.command == "verify-triage":
+        return _verify_triage(args)
+    if args.command == "review":
+        return _review(args)
     if args.command == "benchmark":
         return _benchmark(args)
     print(f"UNKNOWN_COMMAND: {args.command!r}", file=sys.stderr)  # argparse normally prevents this
@@ -370,6 +400,143 @@ def _benchmark(args) -> int:
             f"calls={r['usage_total']['llm_calls']:.0f}"
         )
     print(f"scores: {cfg.run_root / 'scores'}")
+    return 0
+
+
+def _embedded_source(run_dir):
+    import json
+
+    m = json.loads((run_dir / "input_manifest.json").read_text(encoding="utf-8"))
+    return run_dir / m["source_package"]["embedded_path"]
+
+
+def _triage(args) -> int:
+    from pathlib import Path
+
+    from iceclaw.reports import triage_artifact as ta
+    from iceclaw.reports.package import PackageError
+    from iceclaw.science.triage import TriageError
+
+    svc = _service()
+    try:
+        run_dir = svc.resolve_run(args.run)
+        art = ta.build_artifact(_embedded_source(run_dir), run_dir.name)
+    except FileNotFoundError as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    except (PackageError, TriageError, KeyError, OSError) as e:
+        print(f"TRIAGE_FAILED: {getattr(e, 'code', type(e).__name__)}: {e}", file=sys.stderr)
+        return 1
+    t = art["triage"]
+    c, sel = t["counts"], t["selection"]
+    print(ta.LABEL)
+    print(f"source: {art['source']['bundle']} (package {art['source']['package_sha256'][:16]}...)")
+    print(
+        f"windows {c['n_windows']} ({t['grid']['window_px']}x{t['grid']['window_px']} px); "
+        f"index threshold (P{t['config']['index_percentile']:g}) {t['index_threshold_raw']}"
+    )
+    print(
+        f"follow-up screening windows: {c['n_followup_windows']} ({c['n_joint_pixels']} of "
+        f"{c['n_valid_all_layer_pixels']} pixels meet all four conditions); "
+        f"model-observation review windows: {c['n_review_windows']}"
+    )
+    by_id = {w["id"]: w for w in t["windows"]}
+    for i in sel["followup_ids"][:8]:
+        w = by_id[i]
+        print(
+            f"  follow-up {w['label']} rows {w['window'][0]}-{w['window'][1]} cols "
+            f"{w['window'][2]}-{w['window'][3]} ({w['centre_lat']:.3f}, {w['centre_lon']:.3f}) "
+            f"joint pixels {w['n_joint']}"
+        )
+    for i in sel["review_ids"][:8]:
+        w = by_id[i]
+        why = ",".join(sel["review_reasons"][str(i)])
+        print(
+            f"  review    {w['label']} ({w['centre_lat']:.3f}, {w['centre_lon']:.3f}) weak: {why}"
+        )
+    for m in t["messages"]:
+        print(f"NOTE: {m}")
+    if not args.no_write:
+        out = Path(args.out) if args.out else svc.settings.runs_root / "_derived" / run_dir.name
+        out = out if args.out else out / "triage"
+        print(f"wrote {ta.write_artifact(art, out)}")
+    return 0
+
+
+def _verify_triage(args) -> int:
+    from iceclaw.reports import triage_artifact as ta
+
+    try:
+        art = ta.load_artifact(args.artifact)
+        svc = _service()
+        run_dir = svc.resolve_run(args.run or art["source"]["bundle"])
+        rep = ta.verify_artifact(art, _embedded_source(run_dir))
+    except (FileNotFoundError, KeyError, ValueError) as e:
+        print(f"NOT_FOUND_OR_MALFORMED: {type(e).__name__}: {e}", file=sys.stderr)
+        return 2
+    print(rep.render())
+    return 0 if rep.ok else 1
+
+
+def _review(args) -> int:
+    from pathlib import Path
+
+    from iceclaw import services
+    from iceclaw.config import ConfigError
+
+    svc = _service()
+    budget = services.DEFAULT_REVIEW_BUDGET
+    try:
+        run_dir = svc.resolve_run(args.run)
+        source = _embedded_source(run_dir)
+    except FileNotFoundError as e:
+        print(f"RUN_NOT_FOUND: {e}", file=sys.stderr)
+        return 2
+    print(
+        f"review budget (TOTAL for this run): {budget.max_llm_calls} model calls, "
+        f"{budget.max_tool_calls} tool calls, "
+        f"{services.DEFAULT_REVIEW_MAX_INPUT_TOKENS} input tokens"
+    )
+    if not args.confirm_paid:
+        print(
+            "REFUSED: a targeted review makes real, paid model calls. Re-run with --confirm-paid.",
+            file=sys.stderr,
+        )
+        return 2
+    from datetime import UTC, datetime
+
+    out = (
+        Path(args.out)
+        if args.out
+        else svc.settings.runs_root / "_reviews" / f"rev-{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
+    )
+    try:
+        res = services.investigate_window(
+            svc,
+            source_dir=source,
+            window_id=args.window,
+            out_dir=out,
+            source_label=run_dir.name,
+            arm=args.arm,
+        )
+    except ConfigError as e:
+        print(f"LIVE MODE UNAVAILABLE: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:  # unknown window, tampered source etc.
+        print(f"{getattr(e, 'code', type(e).__name__)}: {e}", file=sys.stderr)
+        return 1
+    r, m = res.record, res.record["metrics"]
+    print(
+        f"review {r['review_id']}: {r['status']} ({m['n_reviews_filed']}/{m['n_agents']} reviews), "
+        f"agreement {r['agreement']}; requests {m['n_test_requests']} "
+        f"(answered {m['n_test_requests_answered']}), cross-agent citations "
+        f"{m['n_cross_agent_citations']}; verification {m['n_measurements_reproduced']}/"
+        f"{m['n_measurements_checked']}; calls {m['usage']['llm_calls']}, tokens "
+        f"{m['usage']['total_tokens']}"
+    )
+    for reason in r["incomplete_reasons"]:
+        print(f"INCOMPLETE: {reason}")
+    print(f"wrote {out / 'review.json'}")
     return 0
 
 

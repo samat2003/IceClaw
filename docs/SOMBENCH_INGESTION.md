@@ -1,4 +1,4 @@
-# SomBench observation ingestion and pairing (P4)
+# SomBench scientific inputs: ingestion, units and spatial pairing
 
 Facts below were measured on the actual downloaded files (2026-10-31) unless marked otherwise.
 Nothing here is a model result: the only NASA–IBM prediction is still the **published** MOONATLAS
@@ -122,7 +122,7 @@ observations but no verified prediction, and none was fabricated.
 
 * Additive only: `SourceMode.OBSERVATION_ONLY` (for multimodal scenarios that contain no
   prediction), `Settings.sombench_root` (`ICECLAW_SOMBENCH_ROOT`; `None` disables pairing so
-  P0–P3 behaviour/tests are unchanged), new `data/sombench_adapter.py`, catalog/service/CLI
+  existing prediction-only behaviour and tests are unchanged), new `data/sombench_adapter.py`, catalog/service/CLI
   fields. P1/P2 decoding, projection code and tool formulas are untouched.
 
 ## 8. Remaining limitations
@@ -132,4 +132,4 @@ observations but no verified prediction, and none was fabricated.
 * Units for four layers unknown; `TMAX`/`SLOPE` units rest on upstream naming + anchor matches.
 * Orientation was verified for the paired tile only; the other tiles' pairing is not applicable.
 * The published prediction was trained on the same evidential layers; agreement between
-  inputs and prediction is not independent evidence (see `SOMBENCH_FEASIBILITY.md` §5).
+  inputs and prediction is not independent evidence of water ice. The model learned from related input modalities.

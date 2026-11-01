@@ -5,12 +5,17 @@ import json
 import plotly.graph_objects as go
 import streamlit as st
 
-from iceclaw.data import online
+from iceclaw.data import discovery, online
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def cached_feed(region):
     return online.fetch_scenes(region)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def cached_discovery(region, needs):
+    return discovery.discover(region, list(needs))
 
 
 def render():
@@ -47,6 +52,13 @@ def render():
         rows = online.assess(snapshot)
         if healthy:
             online.update_agents(state, snapshot, rows)
+            try:
+                found = cached_discovery(region, tuple(discovery.discovery_needs(rows)))
+                state["discovery"] = found
+                discovery.handoff(state, found)
+            except online.FeedError as error:
+                st.warning(str(error))
+                st.caption("Resource discovery failed; any previous results below are historical.")
         st.write(f"Last successful fetch: {snapshot['fetched_at']} · {len(rows)} scenes")
         st.caption(
             "Scene review policy: acquisition within 7 days and reported cloud cover ≤35%. "
@@ -82,6 +94,21 @@ def render():
             [{k: v for k, v in row.items() if k not in ("assets", "bbox")} for row in rows],
             hide_index=True,
         )
+        st.subheader("Resources the agents sought automatically")
+        found = state.get("discovery")
+        if found:
+            st.caption(
+                f"Registry checked: {found['fetched_at']} · "
+                "Discovery refreshes every 10 minutes; at most three candidate searches."
+            )
+            st.dataframe(found["resources"], hide_index=True, use_container_width=True)
+            if not found["resources"]:
+                st.info("No matching complementary collections advertised by this registry.")
+            st.caption(
+                "Availability confirms a catalog item covers this region. It does not "
+                "confirm freshness, permission for every asset, sensor suitability or ice. "
+                "Radar, thermal and terrain sources need their own validation tools."
+            )
         st.subheader("Agents and automatic handoffs")
         st.dataframe(
             [dict(agent=k, role=v) for k, v in state.get("roles", {}).items()], hide_index=True
@@ -95,7 +122,14 @@ def render():
                 st.image(thumbnail, caption=f"Provider thumbnail · {selected['acquired_at']}")
         st.download_button(
             "Download fetched catalog and agent evidence",
-            json.dumps(dict(snapshot=snapshot, events=state.get("events", [])), indent=2),
+            json.dumps(
+                dict(
+                    snapshot=snapshot,
+                    discovery=state.get("discovery"),
+                    events=state.get("events", []),
+                ),
+                indent=2,
+            ),
             "online-satellite-evidence.json",
         )
         st.caption(

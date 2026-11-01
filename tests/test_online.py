@@ -2,9 +2,26 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from iceclaw.data import online
+
+
+@pytest.fixture(autouse=True)
+def no_discovery_network(monkeypatch):
+    from iceclaw.ui import online as ui
+
+    monkeypatch.setattr(
+        ui,
+        "cached_discovery",
+        lambda region, needs: dict(
+            region=region,
+            fetched_at="2026-11-01T12:00:00Z",
+            registry_sha256="fixture",
+            resources=[],
+        ),
+    )
 
 
 def snapshot():
@@ -96,3 +113,31 @@ def test_connection_loss_retains_evidence_and_pauses_new_handoffs(monkeypatch):
     app.run()
     assert not app.exception and app.error
     assert app.session_state["online_missions"] == before
+
+
+def test_resource_seeker_runs_automatically_on_online_page(monkeypatch):
+    from iceclaw.ui import online as ui
+
+    monkeypatch.setattr(ui, "cached_feed", lambda region: snapshot())
+    resource = dict(
+        collection="new-radar",
+        reason="Optical evidence gap",
+        kind="radar",
+        status="available; needs source-specific validation",
+        item_id="radar-item",
+        source_sha256="item-hash",
+        assets=["measurement"],
+    )
+    monkeypatch.setattr(
+        ui,
+        "cached_discovery",
+        lambda region, needs: dict(
+            resources=[resource], fetched_at="2026-11-01T12:00:00Z", registry_sha256="registry"
+        ),
+    )
+    path = Path(__file__).resolve().parents[1] / "pages/2_Adaptive_Mission.py"
+    app = AppTest.from_file(path).run(timeout=30)
+    assert not app.exception
+    state = app.session_state["online_missions"]["Svalbard (Earth Arctic)"]
+    assert "new-radar" in state["resource_seen"]
+    assert any(e["role"] == "resource-seeker" for e in state["events"])

@@ -22,6 +22,34 @@ The source is an online satellite **catalog** and its map/thumbnail products: it
 download spectral bands, calculate ice detections, ingest InSAR, or control physical robots.
 Earth observations are kept separate from the original lunar science claims.
 
+## Automatic resource seeking
+
+The resource-seeker role reads the live Earth Search `/collections` registry. Collection IDs
+are discovered from metadata rather than a fixed secondary-dataset list. It classifies advertised
+collections as radar, thermal (including Landsat candidates), or terrain and prioritizes radar
+when optical evidence is missing, stale or cloudy. Classification is a discovery hint, not proof
+that the advertised modality meets a particular science task.
+
+For each kind, it queries one candidate collection with the watched region's bounding box:
+at most one registry request and three item searches per discovery pass, with eight-second
+request timeouts and bounded response sizes. Successful discovery passes are cached for ten
+minutes per region and evidence-gap priority. It records collection license metadata, item IDs,
+asset names, response hashes and query time. Availability means a catalog item intersects the
+region; it does not prove freshness, authorization for each asset or sensor suitability.
+No full-resolution assets are downloaded during discovery.
+
+New or changed results cause resource seeker → resource auditor → task planner handoffs.
+Auditors retain unavailable sources and missing coverage as failures, not measurements.
+Planners request source-specific validation for available items. Unchanged results do not produce
+duplicate handoffs. Agent roles rotate across these tasks; they remain deterministic policy
+agents. The online page displays the resources and includes them in its evidence download.
+
+This is bounded discovery within one trusted public registry, not open-web searching or a
+self-installing agent. Catalog text is metadata, not executable instructions. Source-specific
+measurement tools, pixel analysis, InSAR processing and hardware adapters remain separate work.
+Run `python scripts/resource_discovery_smoke.py` for a real-network discovery check, or
+`python -m pytest tests/test_discovery.py tests/test_online.py -v` for offline tests.
+
 Tests: `python -m pytest tests/test_online.py -v` (offline mocked catalog). A real-network check
 is available with `python scripts/online_catalog_smoke.py`; it saves catalog and agent evidence
 to `/tmp/iceclaw-online-evidence.json`. The test requires internet access and does not spend

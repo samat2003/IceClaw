@@ -108,6 +108,10 @@ public Sentinel-2 catalog and maps recent scene footprints for the selected Eart
 refreshing every 60 seconds while open. No uploads or API key are needed. Agents review actual
 scene acquisition time and cloud metadata and hand off image-analysis tasks for suitable scenes.
 This is online scene discovery and quality triage, not pixel-level ice detection or a lunar feed.
+Agents also seek complementary resources automatically: they inspect the live collection
+registry, prioritize radar when optical coverage is poor, check regional item availability,
+and hand found sources to a resource auditor and planner. Discovery refreshes every 10 minutes;
+the page shows reasons, access/license metadata and validation status for each result.
 Select **Offline replay** to scrub the simulated mission tick. Hazard, temperature, index and robot-fault
 messages change target eligibility and rover assignments. Three policy agents lease analysis,
 audit, planning, recovery and sampling roles as tasks arrive; the synchronized map, role table

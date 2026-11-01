@@ -92,7 +92,8 @@ ignored by Git. Without them, tests that need real data skip, and the app starts
   Copy only this `-public` bundle — never a private bundle or `.env`.
 * **Region catalog and live investigations:** install the pinned MOONATLAS checkout into
   `.upstream/moonatlas-science` ([docs/UPSTREAM_MOONATLAS.md](docs/UPSTREAM_MOONATLAS.md)), download
-  the public SomBench inputs with
+  the public SomBench inputs after installing the optional preparation dependency
+  (`python -m pip install -e ".[prepare]"`) with
   `python scripts/prepare_sombench.py --patches-from-split test --pole south --layers inputs`
   ([docs/SOMBENCH_INGESTION.md](docs/SOMBENCH_INGESTION.md)), and set `OPENAI_API_KEY`,
   `ICECLAW_LLM_MODEL=gpt-6-luna`, `ICECLAW_LLM_PROVIDER=openai` in your environment or a local
@@ -104,7 +105,7 @@ Each bundle contains the event history, every recorded measurement, the report, 
 the model-usage record and a content-addressed copy of the exact source rasters. The verifier
 recomputes every measurement from those rasters within declared tolerances, re-derives the
 evidence, report and ranking from the events, checks hashes, units, geometry and event references,
-and rejects any agent statement claiming detected ice.
+and warns when agent statements assert unsupported ice detections.
 
 ```bash
 python -m iceclaw.cli verify  --run inv-20261031T201513Z-p6-public   # offline; no key, no GPU
@@ -118,7 +119,7 @@ The public bundle omits provider-opaque reasoning data and the internal run data
 workbench offers only public bundles for download. Details:
 [docs/INVESTIGATION_BUNDLE.md](docs/INVESTIGATION_BUNDLE.md).
 
-## Research follow-up screening (deterministic, new)
+## Research follow-up screening (deterministic)
 
 Beyond the attention ranking, IceClaw can screen the paired tile pixel by pixel with a transparent,
 analyst-chosen rule (permanent shadow, TMAX ≤ 110 K, slope ≤ 15°, and a prediction at or above the
@@ -165,14 +166,20 @@ AI hypotheses, and evidence that anyone can verify independently.
 * No statistically generalizable claim of one approach's superiority is made.
 * The live-investigation button is tested offline but has not yet been exercised by a real click.
 
-## Documentation
+## Technical documentation
 
-[Project specification](docs/PROJECT_SPEC.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) ·
-[Workbench](docs/WORKBENCH.md) · [Bundles and verification](docs/INVESTIGATION_BUNDLE.md) ·
-[Agent runtime](docs/AGENT_RUNTIME.md) · [Evaluation protocol](docs/EVALUATION_PROTOCOL.md) ·
-[P7 benchmark](docs/BENCHMARK_P7.md) · [Triage and window review](docs/TRIAGE_REVIEW.md) · [Upstream MOONATLAS](docs/UPSTREAM_MOONATLAS.md) ·
-[SomBench ingestion](docs/SOMBENCH_INGESTION.md) · [Repository rules](AGENTS.md).
-Superseded planning drafts are kept in [docs/archive/](docs/archive/).
+The following documents describe the **working system and its reproducible evidence**, rather
+than historical development plans:
+
+* **Data provenance:** [MOONATLAS published prediction](docs/UPSTREAM_MOONATLAS.md) and
+  [SomBench source ingestion, units and pairing](docs/SOMBENCH_INGESTION.md).
+* **Scientific analysis:** [Lunar research triage and targeted review](docs/TRIAGE_REVIEW.md)
+  and [evaluation methodology](docs/EVALUATION_PROTOCOL.md).
+* **System and verification:** [Agent runtime](docs/AGENT_RUNTIME.md),
+  [investigation bundles and offline verification](docs/INVESTIGATION_BUNDLE.md),
+  and [scientist workbench](docs/WORKBENCH.md).
+* **Measured results:** [Pre-registered agent comparison](docs/BENCHMARK_P7.md),
+  [evaluation outputs](docs/p7_results/), and [benchmark configurations](benchmarks/).
 
 ## Credits and sources
 

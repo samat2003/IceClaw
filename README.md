@@ -1,154 +1,173 @@
 # IceClaw
 
-**Decentralized AI planetary scientists for auditing lunar polar ice-prospectivity predictions**
-ScienceClaw 2026 · [Project source](https://github.com/samat2003/IceClaw)
+**AI scientists for verifiable lunar ice research.**
 
-**Project status (2026-10-31):** all engineering phases **P0–P8 are implemented**. 360 offline
-tests pass (one opt-in live test skipped); Ruff is clean. One genuine live four-specialist
-investigation was recorded, exported, verified offline and published as a public-redacted bundle.
-The P7 comparison was executed once under a pre-registered protocol and its result is **negative
-and exploratory** (below). The live-investigation button of the Streamlit app is wired to the real
-runtime and covered by offline tests, but **a live click from the UI has not yet been exercised**
-(final manual check).
+**IceClaw accelerates lunar ice discovery by automating time-consuming scientific analysis, helping
+researchers verify predictions faster and prioritize the most promising locations for future
+missions.**
 
-**Ice prospectivity is not confirmed lunar ice.** The NASA–IBM output is a regression model's
-ice-prospectivity *index*: not a detection, not an ice abundance and not a calibrated probability.
-IceClaw audits that prediction; it does not claim to discover ice.
+IceClaw is a research workbench in which four AI scientific specialists audit a real NASA–IBM
+lunar ice-prospectivity prediction against real lunar observations. Every number they rely on comes
+from a deterministic scientific tool, and the whole investigation can be downloaded and
+independently re-checked offline. Built for [ScienceClaw 2026](https://scienceclawhack.ai/#competition).
+
+> **Scientific honesty.** IceClaw does not confirm water ice or measure a physical probability of
+> ice. The NASA–IBM output is a model's *prospectivity index*, and IceClaw's ranking of locations
+> reflects investigative scrutiny, not validated ice prospectivity. Prioritizing future mission
+> locations is the intended research use; it has not been experimentally demonstrated.
+
+## The problem
+
+AI models can now produce lunar ice-prospectivity maps, but a scientist still has to check each
+prediction against the evidence: Is the region actually cold? Is it permanently shadowed? What does
+the terrain look like? Are the layers geographically aligned, in the right units, free of corrupted
+values? Doing this by hand is slow and repetitive, and any conclusion needs provenance that someone
+else can reproduce.
 
 ## What IceClaw does
 
-A researcher selects a verified lunar south-polar region. Four Microsoft Agent Framework specialists
-(Thermal, Geology, Prediction Auditor, Skeptic) — running on the configured OpenAI model
-(`gpt-6-luna`) — independently run deterministic scientific tools on the published NASA–IBM
-prediction and the genuine SomBench temperature (TMAX, K), permanent-shadow (LPSR, fraction) and
-slope (SLOPE, deg) layers, publish claims that cite their measurements, and may request tests from
-or challenge one another. Every action goes to an append-only SQLite evidence log.
+1. **Analyze** — compares the published NASA–IBM ice-prospectivity prediction for a lunar
+   south-polar region with co-registered maximum temperature (TMAX), permanently-shadowed-region
+   (LPSR) and terrain slope (SLOPE) observations.
+2. **Investigate** — four AI scientific specialists run real measurements, publish hypotheses that
+   cite them, record alternative explanations and open questions, and may cross-check each other.
+3. **Verify** — exports a portable evidence bundle; anyone can recompute every measurement from the
+   embedded source rasters offline, without an API key.
 
-IceClaw then writes a **reproducible investigation bundle**: the events, every measurement, a
-report, an investigation-attention list and the exact source rasters. Anyone can re-verify it
-offline — the verifier recomputes every measurement from the embedded rasters, re-derives the
-report, checks hashes, units and references, and confirms that no agent statement claims detected
-ice. This turns a model output into an auditable set of checked measurements, documented
-alternative explanations and open research questions in about a minute, instead of a manual
-cross-checking session.
+## How IceClaw works
 
-## Coverage: one paired region, eleven observation-only tiles
+![IceClaw architecture: lunar data, deterministic science tools, four AI specialists, and verifiable outputs](docs/assets/iceclaw-architecture.png)
 
-* **`ice-s-0001-0002`** is the only region with a verified NASA–IBM prediction (published
-  MOONATLAS example, not a fresh IceClaw inference) **paired** with the same tile's SomBench
-  TMAX/LPSR/SLOPE. It is the only region that can be investigated (`PARTIAL_ONE_REGION`).
-* **11 further south test tiles** have verified observations but **no prediction**. The app lists
-  them as *UNAVAILABLE* for investigation; no prediction is ever invented.
+**Lunar data → deterministic scientific measurements → four AI specialists → verifiable scientific report.**
 
-## Install, test and launch (WSL / Linux, Python 3.11–3.12)
+* **Lunar data.** The NASA–IBM Lunar Foundation Model's published ice-prospectivity output for tile
+  `ice-s-0001-0002` (from the MOONATLAS science example) and the same tile's SomBench TMAX (K),
+  LPSR (shadow fraction) and SLOPE (deg) layers. Every file is checksum-verified; geographic
+  alignment between prediction and observations is validated before use.
+* **Deterministic science tools.** Value ranges, quantiles, missing data, gradients and
+  discontinuities, edge behaviour, PSR-versus-temperature consistency and slope statistics. Agents
+  can only call these tools; they cannot invent numbers.
+* **Four AI specialists** (Microsoft Agent Framework, OpenAI `gpt-6-luna`): the **Thermal
+  Scientist**, **Geology Scientist**, **Prediction Auditor** and **Skeptic**. They work
+  concurrently, each with its own layers and tools, and share evidence through an append-only
+  event history (SQLite) with linked citations; requests, challenges and revisions are possible
+  when the evidence warrants them.
+* **Verifiable outputs.** A scientific report, an evidence file, the full event log, and a
+  public-redacted bundle. The offline verifier recomputes every measurement and re-derives the
+  report; it does **not** prove that a language model wrote the text, and it does not confirm ice.
+  The **Streamlit workbench** shows all of this on one page.
 
-```bash
-cd ~/IceClaw
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install -e ".[dev]"
-python -m pytest -q          # offline; no API key needed
-ruff check . && ruff format --check .
-python -m streamlit run app.py
-```
+## See it running
 
-Open **http://localhost:8501** (the server runs headless; it does not open a browser itself).
+![Workbench: NASA–IBM prediction layer in lunar south-polar stereographic coordinates, with investigation-attention targets (not ice locations)](docs/screenshots/p8_prediction_overlay.png)
 
-Live investigations need `OPENAI_API_KEY`, `ICECLAW_LLM_MODEL=gpt-6-luna` and
-`ICECLAW_LLM_PROVIDER=openai` in your environment or a local `.env` (see `.env.example`, which holds
-empty placeholders only). Never commit `.env`. Recorded replay, verification and downloads need no
-key.
+*The real prediction layer on the Streamlit workbench. The white markers are locations the agents'
+measurements examined (investigation attention), not ice detections.*
+More screenshots and a full page description: [docs/WORKBENCH.md](docs/WORKBENCH.md).
 
-## Recorded vs live investigations
-
-| | Recorded (default) | Live |
+| | **Recorded investigation** (default) | **New live investigation** |
 | --- | --- | --- |
-| Source | A saved **public-redacted** bundle in `runs/` (default `inv-20261031T201513Z-p6-public`) | A new run of the four specialists |
-| Model calls | **None** — replayed from saved events, labelled `RECORDED INVESTIGATION` | Real, paid OpenAI calls (budget: ≤ 28 model calls, 150k input tokens) |
-| Starts | Automatically on page load | Only after ticking a cost confirmation and clicking **Investigate**; one run at a time; refreshes never start another |
-| Output | Shown as saved | Verified private bundle → published public-redacted bundle, which the page then loads |
+| What it is | A real earlier run (19 model calls), saved as a public bundle and replayed | A fresh run of the four specialists |
+| Model calls | **None** — clearly labelled `RECORDED INVESTIGATION` | Real, paid OpenAI calls (≤ 28 calls, ≤ 150k input tokens) |
+| How it starts | On page load | Only after ticking a cost confirmation and clicking **Investigate**; never on refresh |
+| Needs | The public bundle in `runs/` | Local source data + OpenAI configuration |
 
-The page shows the region's real layers (Plotly heatmaps in south-polar stereographic km), the
-four agents' activity and any real cross-agent follow-up, the recorded measurements with units,
-AI hypotheses and open questions, the investigation-attention ranking (explicitly **not** ice
-prospectivity), and **Verify findings** / **Download public bundle**. Details:
-[docs/WORKBENCH.md](docs/WORKBENCH.md).
-
-## Verify and export an investigation (command line)
+## Quickstart (WSL / Linux, Python 3.11 or 3.12)
 
 ```bash
-python -m iceclaw.cli verify --run inv-20261031T201513Z-p6-public   # offline; no key, no GPU
-python -m iceclaw.cli replay --run inv-20261031T201513Z-p6-public   # events only; 0 model calls
-python -m iceclaw.cli investigate --region ice-s-0001-0002           # LIVE, paid
-python -m iceclaw.cli publish --run <private-bundle>                 # public-redacted copy; no model call
+git clone https://github.com/samat2003/IceClaw.git && cd IceClaw
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -e ".[dev]"          # or: make install
+python -m pytest -q                         # offline; no key needed (or: make check)
+python -m streamlit run app.py              # or: make ui  →  open http://localhost:8501
 ```
 
-Bundles, the verifier's 23–26 checks and the public-redacted profile are described in
-[docs/INVESTIGATION_BUNDLE.md](docs/INVESTIGATION_BUNDLE.md). Only public-redacted bundles are
-offered for download: they contain no provider-opaque reasoning data and no internal run database.
+**A fresh clone contains no data and no recorded runs** — `data/` and `runs/` are deliberately
+ignored by Git. Without them, tests that need real data skip, and the app starts but reports
+"No regions are available". To enable each part:
 
-## A fresh clone is NOT demo-ready by itself
+* **Recorded demo:** copy the public bundle folder `inv-20261031T201513Z-p6-public` (≈ 1.1 MB,
+  public-redacted, attribution included) from a trusted copy into `runs/`, then check it:
+  `python -m iceclaw.cli verify --run inv-20261031T201513Z-p6-public` → `RESULT: VERIFIED (26 passed …)`.
+  Copy only this `-public` bundle — never a private bundle or `.env`.
+* **Region catalog and live investigations:** install the pinned MOONATLAS checkout into
+  `.upstream/moonatlas-science` ([docs/UPSTREAM_MOONATLAS.md](docs/UPSTREAM_MOONATLAS.md)), download
+  the public SomBench inputs with
+  `python scripts/prepare_sombench.py --patches-from-split test --pole south --layers inputs`
+  ([docs/SOMBENCH_INGESTION.md](docs/SOMBENCH_INGESTION.md)), and set `OPENAI_API_KEY`,
+  `ICECLAW_LLM_MODEL=gpt-6-luna`, `ICECLAW_LLM_PROVIDER=openai` in your environment or a local
+  `.env` (template: `.env.example`, placeholders only).
 
-`data/` and `runs/` are ignored by Git (source data, private evaluation material and run logs are
-never committed). In a fresh clone the app starts, but with no saved bundle and no local catalog it
-shows "No regions are available". To prepare a demo machine safely:
+## Reproducibility
 
-1. **Recorded demo (no key, no downloads):** copy the public-redacted bundle directory
-   `inv-20261031T201513Z-p6-public` (≈ 1.1 MB; it embeds the byte-exact SomBench GeoTIFFs,
-   CC BY 4.0, and the NASA–IBM prediction raster, Apache-2.0, with attribution) from a trusted copy
-   into `runs/`, then confirm it before launching:
-   `python -m iceclaw.cli verify --run inv-20261031T201513Z-p6-public` → `RESULT: VERIFIED (26 passed …)`.
-   Copy **only** the `-public` bundle — never the private bundle (it contains an internal run
-   database and opaque provider data) and never `.env`.
-2. **Region catalog and live runs:** install the pinned MOONATLAS checkout (commit
-   `945fb5196679cf6927354c53be624d745083f9e9`, see [docs/UPSTREAM_MOONATLAS.md](docs/UPSTREAM_MOONATLAS.md))
-   into `.upstream/moonatlas-science`, then download the public SomBench inputs at the pinned
-   revision: `python scripts/prepare_sombench.py --patches-from-split test --pole south --layers inputs`
-   (checksums verified; see [docs/SOMBENCH_INGESTION.md](docs/SOMBENCH_INGESTION.md)).
+Each bundle contains the event history, every recorded measurement, the report, the ranking table,
+the model-usage record and a content-addressed copy of the exact source rasters. The verifier
+recomputes every measurement from those rasters within declared tolerances, re-derives the
+evidence, report and ranking from the events, checks hashes, units, geometry and event references,
+and rejects any agent statement claiming detected ice.
 
-The P7 benchmark suites, sealed keys and raw benchmark logs also live under the ignored folders;
-only their scored summaries, configs, registrations and frozen-output hashes are in
-[docs/p7_results/](docs/p7_results/) and [benchmarks/](benchmarks/). External parties can audit the
-scoring and the hashes but cannot re-score from raw logs without those private files.
+```bash
+python -m iceclaw.cli verify  --run inv-20261031T201513Z-p6-public   # offline; no key, no GPU
+python -m iceclaw.cli replay  --run inv-20261031T201513Z-p6-public   # saved events only; 0 model calls
+python -m iceclaw.cli list-regions                                    # needs the local catalog data
+python -m iceclaw.cli investigate --region ice-s-0001-0002            # LIVE, paid
+python -m iceclaw.cli publish --run <private-bundle>                  # public-redacted copy; no model call
+```
 
-## P7 result: communication did not help (exploratory)
+The public bundle omits provider-opaque reasoning data and the internal run database; the
+workbench offers only public bundles for download. Details:
+[docs/INVESTIGATION_BUNDLE.md](docs/INVESTIGATION_BUNDLE.md).
 
-Pre-registered v2 protocol ([docs/BENCHMARK_P7.md](docs/BENCHMARK_P7.md)): 6 frozen synthetic cases
-(2 clean, 4 faults) built from the one paired tile; equal total budget per case for every LLM
-approach (16 model calls, 16 tool calls, 64k input tokens) with a guaranteed minimum per specialist;
-one pass; outputs frozen before labels were opened.
+## Evaluation: does agent communication help?
 
-| Approach | Faults found | F1 | False alarms | Incomplete | Model calls | Tokens |
-| --- | --- | --- | --- | --- | --- | --- |
-| Deterministic rules | 3/4 | 0.857 | 0 | — | 0 | 0 |
-| One generalist agent | 2/4 | 0.667 | 0 | 0 | 39 | 170 586 |
-| Four isolated specialists | 3/4 | 0.857 | 0 | 0 | 87 | 293 612 |
-| Four communicating specialists | 2/4 | 0.667 | 0 | 1 case (2 verdicts) | 87 | 351 538 |
+A pre-registered experiment ([docs/BENCHMARK_P7.md](docs/BENCHMARK_P7.md)) gave each approach the
+same total budget per case (16 model calls, 16 tool calls, 64k input tokens) on six frozen cases —
+2 clean copies and 4 synthetic faults built from the one real paired tile — with outputs frozen
+before the answers were revealed.
 
-The LLM comparison used 213 model calls and 815 736 tokens. No challenge, revision, test request
-or verdict change occurred; communication did **not** improve detection, completeness or
-efficiency. Six correlated synthetic cases from one real tile, one pass: no statistical
-generalization, and synthetic faults are not lunar anomalies.
+| Approach | Faults found | F1 | Tokens |
+| --- | ---: | ---: | ---: |
+| Deterministic rules | 3/4 | 0.857 | 0 |
+| Single generalist agent | 2/4 | 0.667 | 170,586 |
+| Four isolated specialists | 3/4 | 0.857 | 293,612 |
+| Four communicating specialists | 2/4 | 0.667 | 351,538 |
 
-## Documents
+No approach raised a false alarm. The communicating specialists left one case incomplete (two
+missing individual verdicts). **The experiment did not show an advantage from agent
+communication**: no challenge, revision or verdict change occurred, and communication used the
+most tokens. Six synthetic cases from one tile, one run each — no generalization. Scored summaries,
+configurations, the pre-registration and frozen-output hashes are in
+[docs/p7_results/](docs/p7_results/) and [benchmarks/](benchmarks/).
 
-1. [Project specification](docs/PROJECT_SPEC.md) — scientific objective, contracts, evidence standard.
-2. [Engineering implementation plan (rev. 3.1)](docs/IMPLEMENTATION_PLAN.md) — phases P0–P8, gates; tool-independent.
-3. [AGENTS.md](AGENTS.md) — durable repository rules ([CLAUDE.md](CLAUDE.md) points to them).
-4. [Workbench](docs/WORKBENCH.md), [bundles and verification](docs/INVESTIGATION_BUNDLE.md),
-   [agent runtime](docs/AGENT_RUNTIME.md), [evaluation protocol](docs/EVALUATION_PROTOCOL.md),
-   [P7 benchmark](docs/BENCHMARK_P7.md).
+What IceClaw demonstrably provides is automated, source-backed scientific measurement, transparent
+AI hypotheses, and evidence that anyone can verify independently.
 
-`docs/SCIENTIFIC_PROTOCOL.md` and `docs/DEMO_2MIN.md` are historic notes; prefer the spec and plan.
+## Limitations and scientific integrity
 
-## Foundations
+* **One fully paired region** (`ice-s-0001-0002`). **Eleven further south-polar tiles** have
+  verified observations but no prediction; the app lists them as unavailable and never invents one.
+* The prediction is the **published upstream output**, not a newly executed NASA–IBM model inference.
+* Benchmark faults are **synthetic**; nothing here is a verified ice detection.
+* The investigation-attention ranking counts scrutiny; it is **not** a physical ice probability.
+* No statistically generalizable claim of one approach's superiority is made.
+* The live-investigation button is tested offline but has not yet been exercised by a real click.
 
-- [NASA–IBM Lunar Foundation Model](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model) — the ice-prospectivity model (published output used; no fresh checkpoint inference).
-- [MOONATLAS Science](https://github.com/RRG1312/moonatlas-science) — independent project providing the georeferenced published prediction (not operated or endorsed by NASA/IBM).
-- [SomBench Ice-Prospectivity-Regression](https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-Ice-Prospectivity-Regression) — original TMAX/LPSR/SLOPE observations (CC BY 4.0).
-- [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) — the scientific agents' runtime (OpenAI provider).
+## Documentation
 
-Stack: Python 3.11/3.12, NumPy, Rasterio, Pillow, Pydantic, SQLite, Microsoft Agent Framework,
-Streamlit + Plotly. MOONATLAS runs in its own pinned environment; IceClaw consumes its validated
-artifacts.
+[Project specification](docs/PROJECT_SPEC.md) · [Implementation plan](docs/IMPLEMENTATION_PLAN.md) ·
+[Workbench](docs/WORKBENCH.md) · [Bundles and verification](docs/INVESTIGATION_BUNDLE.md) ·
+[Agent runtime](docs/AGENT_RUNTIME.md) · [Evaluation protocol](docs/EVALUATION_PROTOCOL.md) ·
+[P7 benchmark](docs/BENCHMARK_P7.md) · [Upstream MOONATLAS](docs/UPSTREAM_MOONATLAS.md) ·
+[SomBench ingestion](docs/SOMBENCH_INGESTION.md) · [Repository rules](AGENTS.md).
+Superseded planning drafts are kept in [docs/archive/](docs/archive/).
 
-**Hackathon timeline:** final slides due Nov. 1, 2026, 1:00 PM ET per the [competition site](https://scienceclawhack.ai/#competition).
+## Credits and sources
+
+* [NASA–IBM Lunar Foundation Model](https://github.com/NASA-IMPACT/NASA-IBM-Lunar-Foundation-Model) (Apache-2.0) — the ice-prospectivity model whose published output is audited. Fraccaro, P. et al. (2026), *Multimodal-Multiresolution Foundation Model for Lunar Remote Sensing*, NASA-IBM AI4Science.
+* [MOONATLAS Science](https://github.com/RRG1312/moonatlas-science) — an independent project that published and georeferenced the example prediction (pinned commit `945fb51`).
+* [SomBench Ice-Prospectivity-Regression](https://huggingface.co/datasets/nasa-ibm-ai4science/Sombench-Ice-Prospectivity-Regression) (CC BY 4.0) — the TMAX, LPSR and SLOPE observations (pinned revision `78040503`).
+* [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) — the runtime of the four AI specialists (OpenAI provider).
+
+IceClaw is not affiliated with or endorsed by NASA, IBM, MOONATLAS or Microsoft. Stack: Python,
+NumPy, Rasterio, Pillow, Pydantic, SQLite, Microsoft Agent Framework, Streamlit and Plotly. No
+license file has been added yet.

@@ -1,0 +1,8 @@
+# Normalize text to LF in the repository; never alter binary scientific or image files.
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.tif binary
+*.tiff binary
+*.npy binary
+*.sqlite binary

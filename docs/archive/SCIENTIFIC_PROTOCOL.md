@@ -1,3 +1,5 @@
+> **ARCHIVED — superseded pre-implementation draft (kept for history).** It describes plans and placeholders, not results; some envisioned behaviour (for example agents challenging and revising each other) did not occur in the measured runs. For the current state see the [README](../../README.md), [PROJECT_SPEC](../PROJECT_SPEC.md) and [BENCHMARK_P7](../BENCHMARK_P7.md).
+
 # IceClaw scientific protocol and integration contract
 
 **Status: proposal, not executed.** This document defines the acceptance gates and prevents overstated science.

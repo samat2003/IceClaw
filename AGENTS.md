@@ -19,6 +19,6 @@ Engineering invariants:
 - Tests use fake model providers unless an integration run is explicitly requested. Never fabricate scientific findings, agent messages, benchmark results or tests.
 - Avoid unrelated features, premature UI work and changing canonical contracts without matching documentation and regression tests.
 
-Existing planning docs `docs/SCIENTIFIC_PROTOCOL.md` and `docs/DEMO_2MIN.md` are supplementary and may reflect older assumptions.
+Archived planning drafts `docs/archive/SCIENTIFIC_PROTOCOL.md` and `docs/archive/DEMO_2MIN.md` are superseded and reflect pre-implementation assumptions.
 
 **Current implementation status:** P0–P8 implemented and committed (360 offline tests pass, 1 opt-in live skip). One genuine live four-specialist investigation is recorded, verified offline and published as a public-redacted bundle. P7 was executed once under a pre-registered protocol with a negative, exploratory result (communication did not improve detection, completeness or efficiency on six synthetic cases from one tile; see docs/BENCHMARK_P7.md). Remaining manual check: one live investigation started from the Streamlit UI. The source of truth is implementation plan v3.1. Do not redo committed phases, alter frozen benchmark suites/registrations/scores, or bypass the evaluation firewall; any new comparison needs a new versioned, pre-registered suite.

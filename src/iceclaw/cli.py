@@ -1,4 +1,4 @@
-"""IceClaw CLI. Commands call the shared services; unimplemented ones fail NOT_IMPLEMENTED."""
+"""IceClaw CLI. Every command calls the same services as the Streamlit UI."""
 
 from __future__ import annotations
 
@@ -8,9 +8,7 @@ from collections.abc import Sequence
 
 from iceclaw.config import load_dotenv_file, load_settings
 
-NOT_IMPLEMENTED_EXIT = 2
-
-_PHASES = {"benchmark": "P7"}
+NOT_IMPLEMENTED_EXIT = 2  # kept for compatibility; every command is implemented since P7
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -109,11 +107,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _replay(args.run)
     if args.command == "benchmark":
         return _benchmark(args)
-    print(
-        f"NOT_IMPLEMENTED: '{args.command}' is scheduled for phase {_PHASES[args.command]}.",
-        file=sys.stderr,
-    )
-    return NOT_IMPLEMENTED_EXIT
+    print(f"UNKNOWN_COMMAND: {args.command!r}", file=sys.stderr)  # argparse normally prevents this
+    return 1
 
 
 def _service():

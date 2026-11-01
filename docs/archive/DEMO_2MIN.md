@@ -1,3 +1,5 @@
+> **ARCHIVED — superseded pre-implementation draft (kept for history).** It describes plans and placeholders, not results; some envisioned behaviour (for example agents challenging and revising each other) did not occur in the measured runs. For the current state see the [README](../../README.md), [PROJECT_SPEC](../PROJECT_SPEC.md) and [BENCHMARK_P7](../BENCHMARK_P7.md).
+
 # IceClaw: 2-minute judge presentation
 
 **Draft; insert actual benchmark measurements after the evaluation runs. Never claim unrun experiments or unexplained detections.**

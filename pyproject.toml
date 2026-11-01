@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "iceclaw"
 version = "0.0.1"
-description = "Lunar ice-prospectivity audit workbench (prospectivity index, not detected ice)."
+description = "AI scientists for verifiable lunar ice research: an auditable ice-prospectivity workbench (prospectivity index, not detected ice)."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
